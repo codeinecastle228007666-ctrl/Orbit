@@ -214,6 +214,12 @@ body{
 .kanban-card .card-timer button{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:14px;padding:2px 4px;border-radius:4px;transition:all .15s}
 .kanban-card .card-timer button:hover{color:var(--accent);background:var(--accent-soft)}
 mark{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 3px;font-weight:600}
+.kanban-card.kanban-child{background:var(--bg-tertiary);opacity:0.75;margin-left:18px;margin-bottom:4px;padding:8px 10px;border-left:2px solid var(--border-strong);border-radius:8px;display:flex;align-items:center;gap:8px;box-shadow:none;animation:childIn .3s var(--ease-out);cursor:grab}
+.kanban-card.kanban-child:hover{opacity:1;background:var(--bg-secondary);border-left-color:var(--accent)}
+.kanban-card.kanban-child .card-title{-webkit-line-clamp:2}
+.kanban-card.kanban-child .card-meta{margin-top:0}
+.kanban-card.kanban-child .card-child-line{width:3px;align-self:stretch;background:var(--border-strong);border-radius:2px;flex-shrink:0}
+@keyframes childIn{from{opacity:0;transform:translateX(-6px)}to{opacity:0.75;transform:translateX(0)}}
 .kanban-column.collapsed{min-height:auto!important;flex:0 0 auto!important}
 .kanban-column.collapsed .kanban-cards{display:none}
 
@@ -427,3 +433,8 @@ mark{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding
 /* ═══ LOADING SPINNER ═══ */
 .spinner{width:28px;height:28px;border:3px solid var(--border-soft);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══ PARENT BADGE ═══ */
+.parent-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text-tertiary);background:var(--bg-tertiary);padding:1px 6px;border-radius:4px;cursor:help;border:1px solid var(--border-soft);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.parent-badge::before{content:'⬆';font-size:9px}
+.parent-badge-inline{font-size:9px;color:var(--text-tertiary);margin-left:3px;cursor:help;opacity:0.6;vertical-align:super}

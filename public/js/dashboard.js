@@ -39,7 +39,7 @@ function renderDashboard() {
     const cls = isOverdue(t.dueDate) ? 'high' : isToday(t.dueDate) ? 'medium' : 'low';
     return `<div class="upcoming-item" onclick="openTaskModal(tasks.find(x=>x.id==='${t.id}'))">
       <div class="u-dot priority-dot ${cls}"></div>
-      <div class="u-info"><div class="u-title">${esc(t.title)}</div><div class="u-date">${fmtDate(t.dueDate)}</div></div>
+      <div class="u-info"><div class="u-title">${esc(t.title)}${parentBadge(t) ? '<span class="parent-badge-inline">⬆</span>' : ''}</div><div class="u-date">${fmtDate(t.dueDate)}</div></div>
     </div>`;
   }).join('') : '<div style="font-size:12px;color:var(--text-tertiary);padding:12px">Нет задач с дедлайном</div>';
 

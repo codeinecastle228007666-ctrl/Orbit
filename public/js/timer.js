@@ -131,7 +131,7 @@ function renderTimerView() {
     const statusColor = STATUS_COLORS[t.status] || '#999';
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;transition:all .15s;border:1px solid ${isActive ? 'var(--accent)' : 'var(--border-soft)'};background:${isActive ? 'var(--accent-soft)' : 'var(--bg-secondary)'};margin-bottom:6px" onclick="startTimerForTask('${t.id}');renderTimerView()">
       <span style="width:8px;height:8px;border-radius:50%;background:${statusColor};flex-shrink:0"></span>
-      <span style="flex:1;font-size:13px;font-weight:500;color:var(--text-primary)">${esc(t.title)}</span>
+      <span style="flex:1;font-size:13px;font-weight:500;color:var(--text-primary)">${esc(t.title)}${t.parentId ? ' <span class="parent-badge-inline">⬆</span>' : ''}</span>
       <span style="font-size:11px;color:var(--text-tertiary)">${t.estimate || 30}мин</span>
     </div>`;
   }).join('') || '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Нет активных задач</div>';

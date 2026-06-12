@@ -155,6 +155,11 @@ function loadUIPref(key, fallback) { try { const v = localStorage.getItem('orbit
 const STATUS_COLORS = { backlog: '#94a3b8', todo: '#f59e0b', review: '#8b5cf6', done: '#10b981' };
 const STATUS_LABELS = { backlog: 'Нужно сделать', todo: 'В работе', review: 'На проверке', done: 'Готово' };
 const PRIORITY_WEIGHT = { high: 3, medium: 2, low: 1 };
+function parentBadge(task) {
+  if (!task || !task.parentId) return '';
+  const parent = tasks.find(t => t.id === task.parentId);
+  return parent ? `<span class="parent-badge" title="Родитель: ${esc(parent.title)}">${esc(parent.title)}</span>` : '';
+}
 
 /* ═══ API ═══ */
 async function api(method, path, body) {

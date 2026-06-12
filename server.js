@@ -879,8 +879,8 @@ function checkAchievements(db, isTaskCompletion) {
   const earnedIds = new Set(earned.map(e => e.id));
   const newAchievements = [];
   const give = (id, name, desc, icon, cat) => {
-    if (earnedIds.has(id)) return;
     const aid = 'ach_' + id;
+    if (earnedIds.has(aid)) return;
     dbRun(db, 'INSERT INTO achievements (id, name, description, icon, earned_at, category) VALUES (?, ?, ?, ?, ?, ?)', [aid, name, desc, icon, Date.now(), cat]);
     newAchievements.push({ id: aid, name, description: desc, icon, category: cat, earned_at: Date.now() });
   };
