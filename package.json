@@ -1,0 +1,14 @@
+{
+  "name": "orbit",
+  "version": "2.0.0",
+  "description": "CRM V2 — полная переработка: канбан, расписание, заметки, граф, ачивки, музыка, таймер",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "sql.js": "^1.11.0",
+    "ws": "^8.18.0"
+  }
+}

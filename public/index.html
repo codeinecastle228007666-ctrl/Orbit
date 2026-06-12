@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orbit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="layout">
+  <!-- ═══ SIDEBAR ═══ -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-mark"></span>
+      <div class="logo-text">
+        <span class="logo-name">Orbit</span>
+        <span class="logo-sub">Personal task manager</span>
+      </div>
+    </div>
+    <div class="sidebar-nav">
+      <button class="nav-item active" data-view="dashboard"><span class="nav-icon" data-icon="dashboard"></span><span class="nav-label">Дашборд</span></button>
+      <button class="nav-item" data-view="kanban"><span class="nav-icon" data-icon="kanban"></span><span class="nav-label">Канбан</span><span class="hint">N</span></button>
+      <button class="nav-item" data-view="graph"><span class="nav-icon" data-icon="graph"></span><span class="nav-label">Граф</span><span class="hint">G</span></button>
+      <button class="nav-item" data-view="schedule"><span class="nav-icon" data-icon="schedule"></span><span class="nav-label">Расписание</span></button>
+      <button class="nav-item" data-view="notes"><span class="nav-icon" data-icon="notes"></span><span class="nav-label">Заметки</span></button>
+      <button class="nav-item" data-view="daily-notes"><span class="nav-icon" data-icon="fileText"></span><span class="nav-label">Ежедневные</span></button>
+      <button class="nav-item" data-view="calendar"><span class="nav-icon" data-icon="schedule"></span><span class="nav-label">Календарь</span></button>
+      <button class="nav-item" data-view="timer"><span class="nav-icon" data-icon="clock"></span><span class="nav-label">Таймер</span><span class="hint">T</span></button>
+      <button class="nav-item" data-view="profile"><span class="nav-icon" data-icon="user"></span><span class="nav-label">Профиль</span></button>
+    </div>
+    <div class="sidebar-footer">
+      <button class="nav-item" id="btn-player"><span class="nav-icon" style="font-size:15px">🎧</span><span class="nav-label">Фокус-плеер</span></button>
+      <button class="nav-item" id="btn-help"><span class="nav-icon" style="font-weight:700;font-size:15px">?</span><span class="nav-label">Справка</span><span class="hint">?</span></button>
+      <button class="nav-item" data-view="settings"><span class="nav-icon" data-icon="settings"></span><span class="nav-label">Настройки</span></button>
+    </div>
+  </nav>
+
+  <!-- ═══ MAIN ═══ -->
+  <main class="main">
+    <div class="main-inner">
+
+      <!-- DASHBOARD -->
+      <section class="view active" id="view-dashboard">
+        <div class="view-header"><h1>Дашборд</h1><span style="font-size:12px;color:var(--text-secondary)" id="dashboard-date"></span></div>
+        <div class="dashboard-grid">
+          <div class="stat-card"><div class="stat-icon" data-icon="list"></div><div><div class="stat-value" id="stat-total">0</div><div class="stat-label">Всего задач</div></div></div>
+          <div class="stat-card"><div class="stat-icon" data-icon="check"></div><div><div class="stat-value" id="stat-done">0</div><div class="stat-label">Выполнено</div></div></div>
+          <div class="stat-card"><div class="stat-icon" data-icon="alert"></div><div><div class="stat-value" id="stat-overdue">0</div><div class="stat-label">Просрочено</div></div></div>
+        </div>
+        <div class="dashboard-charts">
+          <div class="chart-card"><h3>Задачи по статусам</h3><div class="bar-chart" id="status-chart"></div></div>
+          <div class="chart-card"><h3>Прогресс</h3><div class="progress-ring-wrap" id="progress-ring"></div></div>
+          <div class="chart-card"><h3>Ближайшие</h3><div class="upcoming-list" id="upcoming-list"></div></div>
+        </div>
+        <div class="chart-card" style="margin-top:16px"><h3>Активность (7 дней × 24 часа)</h3><div id="heatmap-container"></div></div>
+        <div class="chart-card" style="margin-top:16px"><h3>🏆 Достижения</h3><div id="ach-dash-content">Загрузка...</div></div>
+      </section>
+
+      <!-- KANBAN -->
+      <section class="view" id="view-kanban">
+        <div class="view-header"><h1>Канбан-доска</h1>
+          <div class="view-header-actions">
+            <button class="btn btn-primary" id="btn-new-task"><span data-icon="plus"></span>Новая задача</button>
+          </div>
+        </div>
+        <div class="kanban-toolbar">
+          <span class="search-wrap"><span data-icon="search"></span><input type="text" id="kanban-search" class="input-search" placeholder="Поиск... ( / )"></span>
+          <button class="filter-chip active" data-filter="all">Все</button>
+          <button class="filter-chip" data-filter="high"><span data-icon="high"></span>Высокий</button>
+          <button class="filter-chip" data-filter="medium"><span data-icon="med"></span>Средний</button>
+          <button class="filter-chip" data-filter="low"><span data-icon="low"></span>Низкий</button>
+          <button class="filter-chip" data-filter="overdue"><span data-icon="clock"></span>Просрочено</button>
+          <span style="font-size:11px;color:var(--text-secondary);font-weight:500" id="kanban-filter-count"></span>
+        </div>
+        <div class="kanban-board" id="kanban-board">
+          <div class="kanban-column" data-status="backlog"><div class="kanban-column-header"><h3>Нужно сделать</h3><span class="count" id="count-backlog">0</span></div><div class="kanban-cards" id="cards-backlog"></div></div>
+          <div class="kanban-column" data-status="todo"><div class="kanban-column-header"><h3>В работе</h3><span class="count" id="count-todo">0</span></div><div class="kanban-cards" id="cards-todo"></div></div>
+          <div class="kanban-column" data-status="review"><div class="kanban-column-header"><h3>На проверке</h3><span class="count" id="count-review">0</span></div><div class="kanban-cards" id="cards-review"></div></div>
+          <div class="kanban-column" data-status="done"><div class="kanban-column-header"><h3>Готово</h3><span class="count" id="count-done">0</span></div><div class="kanban-cards" id="cards-done"></div></div>
+        </div>
+      </section>
+
+      <!-- GRAPH -->
+      <section class="view" id="view-graph">
+        <div class="view-header"><h1>Граф связей</h1>
+          <div class="view-header-actions">
+            <button class="btn btn-ghost" id="btn-graph-reset"><span data-icon="target"></span>Сбросить</button>
+            <button class="btn btn-ghost" id="btn-graph-local" style="display:none"><span data-icon="layers"></span>Локальный</button>
+            <button class="btn btn-ghost" id="btn-graph-spread"><span data-icon="maximize"></span>Разбросать</button>
+            <button class="btn btn-ghost" id="btn-graph-straight">Линии</button>
+            <button class="btn btn-ghost" id="btn-graph-export"><span data-icon="camera"></span>PNG</button>
+            <button class="btn btn-ghost" id="btn-camera-back" title="Назад">←</button>
+            <button class="btn btn-ghost" id="btn-camera-forward" title="Вперёд">→</button>
+            <button class="btn btn-primary" id="btn-graph-organize"><span data-icon="sparkle"></span>AI-организация</button>
+          </div>
+        </div>
+        <div id="graph-container" style="position:relative">
+          <div id="graph-filter-bar">
+            <button class="filter-chip active" data-gstatus="backlog" style="font-size:10px;padding:3px 8px">Нужно сделать</button>
+            <button class="filter-chip active" data-gstatus="todo" style="font-size:10px;padding:3px 8px">В работе</button>
+            <button class="filter-chip active" data-gstatus="review" style="font-size:10px;padding:3px 8px">На проверке</button>
+            <button class="filter-chip active" data-gstatus="done" style="font-size:10px;padding:3px 8px">Готово</button>
+          </div>
+          <div id="graph-legend">
+            <div class="legend-title">Узлы</div>
+            <div class="legend-row"><span class="legend-dot" style="background:#a8a094"></span>Нужно сделать</div>
+            <div class="legend-row"><span class="legend-dot" style="background:#d49a3a"></span>В работе</div>
+            <div class="legend-row"><span class="legend-dot" style="background:#9b7fb8"></span>На проверке</div>
+            <div class="legend-row"><span class="legend-dot" style="background:#6f9c5e"></span>Готово</div>
+            <div class="legend-title" style="margin-top:8px">Связи</div>
+            <div class="legend-row"><span class="legend-line" style="background:#85ad72"></span>Связанные</div>
+            <div class="legend-row"><span class="legend-line" style="background:#e0b05c;border-style:dashed"></span>Родительские</div>
+          </div>
+          <canvas id="graph-minimap" width="160" height="100" style="position:absolute;bottom:8px;right:8px;border-radius:6px;z-index:5;cursor:pointer"></canvas>
+          <div id="graph-ctx-menu" style="display:none;position:absolute;z-index:20;background:var(--bg-secondary);border:1px solid var(--border-soft);border-radius:8px;padding:4px 0;min-width:140px;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+            <div class="ctx-item" data-action="edit" style="padding:6px 14px;font-size:12px;cursor:pointer">✏️ Редактировать</div>
+            <div class="ctx-item" data-action="focus" style="padding:6px 14px;font-size:12px;cursor:pointer">⛵ Фокус</div>
+            <div class="ctx-item" data-action="local" style="padding:6px 14px;font-size:12px;cursor:pointer">⊙ Локальный граф</div>
+            <div class="ctx-item" data-action="center" style="padding:6px 14px;font-size:12px;cursor:pointer">◉ В центр</div>
+            <div class="ctx-item" data-action="pin" style="padding:6px 14px;font-size:12px;cursor:pointer">📌 Закрепить</div>
+            <div class="ctx-divider" style="height:1px;background:var(--border-soft);margin:4px 0"></div>
+            <div class="ctx-item" data-action="delete" style="padding:6px 14px;font-size:12px;cursor:pointer;color:var(--danger)">🗑 Удалить</div>
+          </div>
+          <div id="graph-zoom-btns" style="position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:5">
+            <button class="btn btn-sm btn-icon" id="btn-zoom-in" style="width:28px;height:28px">+</button>
+            <button class="btn btn-sm btn-icon" id="btn-zoom-out" style="width:28px;height:28px">−</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCHEDULE -->
+      <section class="view" id="view-schedule">
+        <div class="view-header"><h1>Расписание дня</h1>
+          <div class="view-header-actions">
+            <div class="date-nav">
+              <button class="btn btn-sm btn-icon" id="sch-prev"><span data-icon="chevronLeft"></span></button>
+              <span id="schedule-date-label">Сегодня</span>
+              <button class="btn btn-sm btn-icon" id="sch-next"><span data-icon="chevronRight"></span></button>
+              <button class="btn btn-sm" id="sch-today">Сегодня</button>
+            </div>
+            <button class="btn btn-primary" id="btn-ai-schedule"><span data-icon="sparkle"></span>AI-расписание</button>
+          </div>
+        </div>
+        <div class="schedule-container">
+          <div class="schedule-timeline"><div class="timeline" id="timeline"></div></div>
+          <div class="schedule-sidebar"><h3>Незапланировано</h3><div id="unscheduled-list"></div></div>
+        </div>
+      </section>
+
+      <!-- NOTES -->
+      <section class="view" id="view-notes">
+        <div class="view-header"><h1>Заметки</h1>
+          <div class="view-header-actions"><button class="btn btn-primary" id="btn-new-note"><span data-icon="plus"></span>Новая заметка</button></div>
+        </div>
+        <div class="notes-layout">
+          <div class="notes-list" id="notes-list"></div>
+          <div class="notes-editor" id="notes-editor">
+            <div class="notes-empty"><span data-icon="fileText"></span><p>Выберите или создайте заметку</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DAILY NOTES -->
+      <section class="view" id="view-daily-notes">
+        <div class="view-header"><h1>Ежедневные заметки</h1>
+          <div class="view-header-actions">
+            <div class="date-nav">
+              <button class="btn btn-sm btn-icon" id="dn-prev"><span data-icon="chevronLeft"></span></button>
+              <span id="dn-date-label">Сегодня</span>
+              <button class="btn btn-sm btn-icon" id="dn-next"><span data-icon="chevronRight"></span></button>
+              <button class="btn btn-sm" id="dn-today">Сегодня</button>
+            </div>
+          </div>
+        </div>
+        <div class="notes-editor" id="daily-notes-editor" style="height:calc(100vh - 180px)">
+          <input type="text" id="daily-notes-title" placeholder="Заголовок" readonly style="cursor:default">
+          <textarea id="daily-notes-content" placeholder="Запишите мысли, идеи, планы..."></textarea>
+        </div>
+      </section>
+
+      <!-- CALENDAR -->
+      <section class="view" id="view-calendar">
+        <div class="view-header"><h1>Календарь</h1>
+          <div class="view-header-actions">
+            <div class="date-nav">
+              <button class="btn btn-sm btn-icon" id="cal-prev"><span data-icon="chevronLeft"></span></button>
+              <span id="cal-month-label">—</span>
+              <button class="btn btn-sm btn-icon" id="cal-next"><span data-icon="chevronRight"></span></button>
+              <button class="btn btn-sm" id="cal-today">Сегодня</button>
+            </div>
+          </div>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+      </section>
+
+      <!-- TIMER -->
+      <section class="view" id="view-timer">
+        <div class="view-header"><h1>⏱️ Таймер задач</h1></div>
+        <div id="timer-main" style="max-width:600px;margin:0 auto">
+          <div style="text-align:center;margin-bottom:32px">
+            <div id="timer-display" style="font-size:72px;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--accent);letter-spacing:-3px;margin-bottom:16px">00:00:00</div>
+            <div id="timer-task-name" style="font-size:16px;color:var(--text-secondary);margin-bottom:24px;font-weight:500">Выберите задачу</div>
+            <div style="display:flex;gap:12px;justify-content:center">
+              <button class="btn btn-primary btn-lg" id="timer-start" style="padding:14px 32px;font-size:16px"><span data-icon="play"></span>Старт</button>
+              <button class="btn btn-lg" id="timer-pause" style="padding:14px 32px;font-size:16px;display:none"><span data-icon="pause"></span>Пауза</button>
+              <button class="btn btn-danger btn-lg" id="timer-stop" style="padding:14px 32px;font-size:16px;display:none">⏹ Стоп</button>
+            </div>
+          </div>
+          <div style="margin-bottom:24px">
+            <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-secondary);margin-bottom:12px;font-weight:600">Выберите задачу для таймера</h3>
+            <input type="text" id="timer-task-search" class="input-search" placeholder="Поиск задачи..." style="width:100%;margin-bottom:12px">
+            <div id="timer-task-list" style="max-height:300px;overflow-y:auto"></div>
+          </div>
+          <div id="timer-history">
+            <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-secondary);margin-bottom:12px;font-weight:600">История сессий</h3>
+            <div id="timer-history-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROFILE -->
+      <section class="view" id="view-profile">
+        <div class="view-header"><h1>Профиль</h1></div>
+        <div id="profile-hero" style="background:var(--bg-secondary);border-radius:16px;padding:28px 32px;border:1px solid var(--border-soft);box-shadow:var(--shadow);margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+            <div id="profile-level-icon" style="font-size:48px;width:80px;height:80px;display:flex;align-items:center;justify-content:center;background:var(--accent-soft);border-radius:20px;flex-shrink:0">⚡</div>
+            <div style="flex:1;min-width:200px">
+              <div id="profile-level-name" style="font-size:24px;font-weight:700;color:var(--text-primary);margin-bottom:4px">Загрузка...</div>
+              <div id="profile-level-sub" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px"></div>
+              <div style="height:8px;background:var(--bg-tertiary);border-radius:4px;overflow:hidden;margin-bottom:6px"><div id="profile-xp-bar" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--warning));border-radius:4px;width:0%"></div></div>
+              <div id="profile-xp-text" style="font-size:11px;color:var(--text-tertiary);font-family:JetBrains Mono,monospace"></div>
+            </div>
+          </div>
+        </div>
+        <div id="profile-stats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px"></div>
+        <div id="profile-cat-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+        <div id="profile-ach-count" style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;font-weight:500"></div>
+        <div id="profile-ach-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px"></div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="view-settings">
+        <div class="view-header"><h1>Настройки</h1></div>
+        <div class="settings-section"><h3>Оформление</h3>
+          <div class="setting-row"><div><div class="setting-label">Тёмная тема</div><div class="setting-desc">Переключить оформление</div></div><label class="toggle"><input type="checkbox" id="theme-toggle" checked><span class="slider"></span></label></div>
+        </div>
+        <div class="settings-section"><h3>Рабочее время</h3>
+          <div class="setting-row"><div class="setting-label">Начало дня</div><input type="time" id="work-start" value="09:00"></div>
+          <div class="setting-row"><div class="setting-label">Конец дня</div><input type="time" id="work-end" value="18:00"></div>
+        </div>
+        <div class="settings-section"><h3>AI-планирование</h3>
+          <div class="setting-row"><div class="setting-label">Длительность слота (мин)</div><input type="number" id="slot-duration" value="30" min="15" step="15" style="width:80px"></div>
+          <div class="setting-row"><div><div class="setting-label">OpenRouter API ключ</div><div class="setting-desc">Без ключа — встроенный алгоритм</div></div><input type="password" id="ai-key" placeholder="sk-or-v1-..." style="width:240px"></div>
+        </div>
+        <div class="settings-section"><h3>Данные</h3>
+          <div class="setting-row"><div><div class="setting-label">Экспорт JSON</div><div class="setting-desc">Скачать все данные</div></div><button class="btn" id="btn-export"><span data-icon="download"></span>Экспорт</button></div>
+          <div class="setting-row"><div><div class="setting-label">Импорт JSON</div><div class="setting-desc">Восстановить из файла</div></div><div><button class="btn" id="btn-import"><span data-icon="upload"></span>Импорт</button><input type="file" id="import-file" accept=".json" style="display:none"></div></div>
+          <div class="setting-row" style="border:none;padding-top:8px"><button class="btn btn-danger" id="btn-clear"><span data-icon="trash"></span>Очистить все данные</button></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- TASK MODAL -->
+<div class="modal-overlay" id="task-modal">
+  <div class="modal">
+    <h2 id="task-modal-title">Новая задача</h2>
+    <div class="form-group"><label>Название</label><input type="text" id="task-title" placeholder="Что нужно сделать?"></div>
+    <div class="form-group"><label>Описание</label><textarea id="task-desc" rows="3" placeholder="Подробности... [[Задача]] для связи"></textarea></div>
+    <div class="form-group"><label>Приоритет</label>
+      <select id="task-priority"><option value="high">Высокий</option><option value="medium" selected>Средний</option><option value="low">Низкий</option></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Срок</label><input type="date" id="task-due"></div>
+      <div class="form-group"><label>Оценка (мин)</label><input type="number" id="task-estimate" value="30" min="5" step="5"></div>
+    </div>
+    <div class="form-group"><label>Теги (через запятую)</label><input type="text" id="task-tags" placeholder="работа, срочно, личное"></div>
+    <div class="form-group"><label>Статус</label>
+      <select id="task-status"><option value="backlog">Нужно сделать</option><option value="todo">В работе</option><option value="review">На проверке</option><option value="done">Готово</option></select>
+    </div>
+    <div class="form-group"><label>Повторение</label>
+      <select id="task-recurring"><option value="">— Нет —</option><option value="daily">Ежедневно</option><option value="weekdays">По будням</option><option value="weekly">Еженедельно</option><option value="monthly">Ежемесячно</option></select>
+    </div>
+    <div class="form-group"><label>Родительская задача</label><select id="task-parent"><option value="">— Нет —</option></select></div>
+    <div class="form-group" id="task-timer-group" style="display:none">
+      <label>⏱ Таймер задачи</label>
+      <div class="pomodoro-wrap">
+        <div class="timer-display" id="pomodoro-display">00:00</div>
+        <button class="btn btn-icon timer-btn" id="btn-pomodoro-start" title="Старт"><span data-icon="play"></span></button>
+        <button class="btn btn-icon timer-btn" id="btn-pomodoro-pause" title="Пауза" style="display:none"><span data-icon="pause"></span></button>
+        <button class="btn btn-icon timer-btn" id="btn-pomodoro-stop" title="Стоп" style="display:none">⏹</button>
+        <div class="timer-sep"></div>
+        <span class="timer-label">Всего: <strong id="task-actual-time">0 мин</strong></span>
+      </div>
+    </div>
+    <div class="form-group"><h4 style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-secondary);margin-bottom:10px;font-weight:600">Комментарии</h4><div id="comments-list"></div><div class="comment-input-row"><input type="text" id="comment-input" placeholder="Добавить комментарий..."><button class="btn btn-sm btn-primary" id="btn-add-comment">Отпр.</button></div></div>
+    <div class="form-actions">
+      <button class="btn" id="btn-modal-cancel">Отмена</button>
+      <button class="btn btn-danger" id="btn-modal-delete" style="display:none">Удалить</button>
+      <button class="btn btn-primary" id="btn-modal-save">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="js/core.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/kanban.js"></script>
+<script src="js/timer.js"></script>
+<script src="js/schedule.js"></script>
+<script src="js/notes.js"></script>
+<script src="js/calendar.js"></script>
+<script src="js/graph.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/modal.js"></script>
+<script src="js/focus.js"></script>
+<script src="js/player.js"></script>
+<script src="js/events.js"></script>
+<script src="js/bootstrap.js"></script>
+
+<!-- Old inline fixes (now in module files):
+// Fixes kanban editing, graph physics, and graph side panel
+// Runs AFTER app.js — overrides/extends global functions
+
+(function() {
+'use strict';
+
+// ─── 1. KANBAN CLICK + DBLCLICK FIX ───
+// The main app.js click handler may silently fail if initEvents() throws.
+// Add robust fallback handlers that always work.
+function setupKanbanFixes() {
+  const board = document.getElementById('kanban-board');
+  if (!board) return;
+
+  // Capture-phase click handler (fires BEFORE any bubble-phase handler)
+  board.addEventListener('click', function(e) {
+    var card = e.target.closest('.kanban-card');
+    if (!card) return;
+    var id = card.dataset.id;
+    if (typeof tasks === 'undefined') return;
+    var task = tasks.find(function(x) { return x.id === id; });
+    if (!task) return;
+
+    // Button clicks
+    if (e.target.closest('.btn-card-edit')) {
+      e.stopPropagation();
+      if (typeof openTaskModal === 'function') openTaskModal(task);
+      return;
+    }
+    if (e.target.closest('.btn-card-focus')) {
+      e.stopPropagation();
+      if (typeof openFocusMode === 'function') openFocusMode(id);
+      return;
+    }
+    if (e.target.closest('.btn-card-delete')) {
+      e.stopPropagation();
+      if (typeof deleteTask === 'function') deleteTask(id);
+      return;
+    }
+    if (e.target.closest('.btn-card-timer-toggle')) {
+      e.stopPropagation();
+      if (typeof toggleCardTimer === 'function') toggleCardTimer(id);
+      return;
+    }
+    if (e.target.closest('.btn-card-timer-stop')) {
+      e.stopPropagation();
+      if (typeof stopCardTimer === 'function') stopCardTimer();
+      return;
+    }
+    // Fallback: clicking card body opens modal (in case app.js handler failed)
+    if (!e.target.closest('button')) {
+      e.stopPropagation();
+      if (typeof openTaskModal === 'function') openTaskModal(task);
+    }
+  }, true); // capture phase
+
+  // Double-click to edit (most reliable with draggable cards)
+  board.addEventListener('dblclick', function(e) {
+    var card = e.target.closest('.kanban-card');
+    if (!card) return;
+    var id = card.dataset.id;
+    if (typeof tasks === 'undefined') return;
+    var task = tasks.find(function(x) { return x.id === id; });
+    if (task && typeof openTaskModal === 'function') openTaskModal(task);
+  });
+
+}
+setupKanbanFixes();
+
+// ─── 2. GRAPH: FREE-DRIFTING PHYSICS ───
+// Override startGraphIdleAnim to remove spring anchor
+// Nodes drift freely across the surface with repulsion + wandering
+var _graphSidePanel = null;
+
+if (typeof startGraphIdleAnim === 'function') {
+  var _origStartIdle = startGraphIdleAnim;
+}
+
+window.startGraphIdleAnim = function() {
+  if (typeof stopGraphIdleAnim === 'function') stopGraphIdleAnim();
+  if (typeof gNodes === 'undefined' || gNodes.length === 0) return;
+
+  // Initialize physics — no base position anchor
+  gNodes.forEach(function(n) {
+    n._vx = (Math.random() - 0.5) * 2;
+    n._vy = (Math.random() - 0.5) * 2;
+    n._mass = (n.size || 7) * 0.12;
+    n._phase = Math.random() * Math.PI * 2;
+  });
+
+  var damping = 0.97;
+  var repulseRadius = 80;
+  var repulseForce = 0.5;
+  var wanderForce = 0.25;
+  var maxV = 1.8;
+  var wallBounce = 0.5;
+  var driftForce = 0.05;
+
+  var container = document.getElementById('graph-container');
+  var W = (container && container.clientWidth) || 800;
+  var H = (container && container.clientHeight) || 600;
+  var margin = 30;
+
+  var lastTime = performance.now();
+
+  function tick() {
+    if (typeof currentView !== 'undefined' && currentView !== 'graph') { _graphIdleRaf = null; return; }
+    if (typeof gDrag !== 'undefined' && (gDrag || gPan)) { lastTime = performance.now(); _graphIdleRaf = requestAnimationFrame(tick); return; }
+
+    var now = performance.now();
+    var dt = Math.min((now - lastTime) / 16.67, 3);
+    lastTime = now;
+    var t = now / 1000;
+
+    gNodes.forEach(function(n, i) {
+      var fx = 0, fy = 0;
+      var rPhase = n._phase + t * 0.4;
+      fx += (Math.sin(rPhase * 1.1 + i * 0.7) * 0.6 + (Math.random() - 0.5) * 0.4) * wanderForce;
+      fy += (Math.cos(rPhase * 0.8 + i * 1.1) * 0.6 + (Math.random() - 0.5) * 0.4) * wanderForce;
+      fx += Math.sin(t * 0.12 + n._phase * 0.5) * driftForce;
+      fy += Math.cos(t * 0.09 + n._phase * 0.3) * driftForce;
+
+      for (var j = 0; j < gNodes.length; j++) {
+        if (j === i) continue;
+        var other = gNodes[j];
+        var dx = n.x - other.x;
+        var dy = n.y - other.y;
+        var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        if (dist < repulseRadius) {
+          var strength = repulseForce * (1 - dist / repulseRadius) * (1 - dist / repulseRadius);
+          fx += (dx / dist) * strength;
+          fy += (dy / dist) * strength;
+        }
+      }
+
+      n._vx += (fx / n._mass) * dt;
+      n._vy += (fy / n._mass) * dt;
+      n._vx *= Math.pow(damping, dt);
+      n._vy *= Math.pow(damping, dt);
+      var speed = Math.sqrt(n._vx * n._vx + n._vy * n._vy);
+      if (speed > maxV) { n._vx = (n._vx / speed) * maxV; n._vy = (n._vy / speed) * maxV; }
+      n.x += n._vx * dt;
+      n.y += n._vy * dt;
+
+      if (n.x < margin) n._vx += wallBounce * dt;
+      if (n.x > W - margin) n._vx -= wallBounce * dt;
+      if (n.y < margin) n._vy += wallBounce * dt;
+      if (n.y > H - margin) n._vy -= wallBounce * dt;
+    });
+
+    var svg = document.querySelector('#graph-svg');
+    var edgesGroup = svg && svg.querySelector('#graph-edges');
+    var edgePaths = edgesGroup && edgesGroup.querySelectorAll('.graph-edge');
+    var particlesGroup = svg && svg.querySelector('#graph-particles');
+    var particles = particlesGroup && particlesGroup.querySelectorAll('.graph-particle');
+
+    gNodes.forEach(function(n) {
+      var nodeG = svg && svg.querySelector('.graph-node[data-id="' + n.id + '"]');
+      if (nodeG) nodeG.setAttribute('transform', 'translate(' + n.x + ',' + n.y + ')');
+    });
+
+    if (edgePaths && typeof gEdges !== 'undefined' && typeof edgeCurve === 'function') {
+      gEdges.forEach(function(edge, i) {
+        if (i >= edgePaths.length) return;
+        edgePaths[i].setAttribute('d', edgeCurve(edge, i).d);
+      });
+    }
+
+    if (particles && typeof gEdges !== 'undefined' && typeof edgeCurve === 'function') {
+      particles.forEach(function(p) {
+        var ei = parseInt(p.dataset.edgeIdx);
+        var pi = parseInt(p.dataset.pIdx);
+        var edge = gEdges[ei];
+        if (!edge) return;
+        var progress = ((t * (0.15 + ei * 0.02 + pi * 0.1)) % 1);
+        var curve = edgeCurve(edge, ei);
+        var s = edge.source, tgt = edge.target;
+        var u = 1 - progress;
+        var bx = u * u * s.x + 2 * u * progress * curve.cx + progress * progress * tgt.x;
+        var by = u * u * s.y + 2 * u * progress * curve.cy + progress * progress * tgt.y;
+        p.setAttribute('cx', bx);
+        p.setAttribute('cy', by);
+        p.setAttribute('opacity', '0.7');
+      });
+    }
+
+    _graphIdleRaf = requestAnimationFrame(tick);
+  }
+  _graphIdleRaf = requestAnimationFrame(tick);
+};
+
+// ─── 3. GRAPH: SIDE PANEL WITH TASK INFO ───
+// Override renderGraphSvg to add side panel click handling
+if (typeof renderGraphSvg === 'function') {
+  var _origRenderGraphSvg = renderGraphSvg;
+  window.renderGraphSvg = function() {
+    _origRenderGraphSvg();
+    // After rendering, replace node click handlers with side panel
+    enhanceGraphNodes();
+  };
+}
+
+function enhanceGraphNodes() {
+  var svg = document.querySelector('#graph-svg');
+  if (!svg) return;
+  var nodesGroup = svg.querySelector('#graph-nodes');
+  if (!nodesGroup) return;
+
+  nodesGroup.querySelectorAll('.graph-node').forEach(function(g) {
+    var id = g.getAttribute('data-id');
+    if (!id) return;
+    // Add capture-phase click listener that opens side panel
+    g.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      showGraphSidePanel(id);
+    }, true); // capture phase — fires before the original handler
+  });
+}
+
+window.showGraphSidePanel = function(nodeId) {
+  // Toggle: if already showing this task, close instead
+  if (_graphSidePanel && _graphSidePanel.dataset.taskId === nodeId) {
+    closeGraphSidePanel();
+    return;
+  }
+  closeGraphSidePanel();
+
+  if (typeof tasks === 'undefined') return;
+  var task = tasks.find(function(t) { return t.id === nodeId; });
+  if (!task) return;
+
+  var container = document.getElementById('graph-container');
+  if (!container) return;
+
+  var panel = document.createElement('div');
+  panel.id = 'graph-side-panel';
+  panel.style.cssText = 'position:absolute;top:0;right:0;width:320px;height:100%;background:var(--bg-secondary);border-left:1px solid var(--border-soft);box-shadow:-4px 0 24px rgba(0,0,0,0.3);z-index:10;overflow-y:auto;animation:slideInRight .25s ease-out;display:flex;flex-direction:column';
+
+  var statusColor = (typeof STATUS_COLORS !== 'undefined' && STATUS_COLORS[task.status]) || '#999';
+  var statusLabel = (typeof STATUS_LABELS !== 'undefined' && STATUS_LABELS[task.status]) || task.status;
+  var priLabel = ({ high: '\u0412\u044b\u0441\u043e\u043a\u0438\u0439', medium: '\u0421\u0440\u0435\u0434\u043d\u0438\u0439', low: '\u041d\u0438\u0437\u043a\u0438\u0439' })[task.priority] || task.priority;
+  var priColor = ({ high: 'var(--danger)', medium: 'var(--warning)', low: 'var(--accent)' })[task.priority] || 'var(--text-secondary)';
+  var children = tasks.filter(function(t) { return t.parentId === task.id; });
+  var tagsHtml = (task.tags || []).map(function(tg) { return '<span class="tag">#' + esc(tg) + '</span>'; }).join('');
+  var dueText = task.dueDate ? fmtDate(task.dueDate) : '\u2014';
+  var timeText = task.actualTime ? formatTimerTime(task.actualTime) : '\u2014';
+  var descHtml = task.desc ? '<div style="margin-bottom:16px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-tertiary);margin-bottom:8px;font-weight:600">\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435</div><div style="font-size:13px;color:var(--text-primary);line-height:1.6;white-space:pre-wrap">' + esc(task.desc) + '</div></div>' : '';
+  var tagsSection = tagsHtml ? '<div style="margin-bottom:16px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-tertiary);margin-bottom:8px;font-weight:600">\u0422\u0435\u0433\u0438</div><div style="display:flex;gap:6px;flex-wrap:wrap">' + tagsHtml + '</div></div>' : '';
+  var recurText = task.recurring ? '<div style="margin-bottom:16px;font-size:12px;color:var(--accent)">\ud83d\udd01 ' + ({ daily: '\u0415\u0436\u0435\u0434\u043d\u0435\u0432\u043d\u043e', weekly: '\u0415\u0436\u0435\u043d\u0435\u0434\u0435\u043b\u044c\u043d\u043e', monthly: '\u0415\u0436\u0435\u043c\u0435\u0441\u044f\u0447\u043d\u043e', weekdays: '\u041f\u043e \u0431\u0443\u0434\u043d\u044f\u043c' })[task.recurring] || '' + '</div>' : '';
+  var childrenHtml = '';
+  if (children.length > 0) {
+    var doneCount = children.filter(function(c) { return c.status === 'done'; }).length;
+    childrenHtml = '<div style="margin-bottom:16px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-tertiary);margin-bottom:8px;font-weight:600">\u041f\u043e\u0434\u0437\u0430\u0434\u0430\u0447\u0438 (' + doneCount + '/' + children.length + ')</div>';
+    children.forEach(function(c) {
+      var cColor = c.status === 'done' ? 'var(--success)' : 'var(--border-strong)';
+      var cStyle = c.status === 'done' ? 'text-decoration:line-through;opacity:0.6' : '';
+      childrenHtml += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;margin-bottom:4px;background:var(--bg-tertiary);font-size:12px"><span style="width:8px;height:8px;border-radius:50%;background:' + cColor + ';flex-shrink:0"></span><span style="flex:1;color:var(--text-primary);' + cStyle + '">' + esc(c.title) + '</span></div>';
+    });
+    childrenHtml += '</div>';
+  }
+
+  panel.innerHTML = '<div style="padding:16px 20px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:10px">'
+    + '<button id="sp-close" style="background:none;border:none;color:var(--text-secondary);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px">\u2715</button>'
+    + '<span style="flex:1;font-size:14px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(task.title) + '</span>'
+    + '<button id="sp-edit" style="background:var(--accent-soft);border:1px solid var(--accent);color:var(--accent);font-size:11px;cursor:pointer;padding:4px 10px;border-radius:6px;font-weight:600">\u270f\ufe0f</button>'
+    + '</div>'
+    + '<div style="padding:16px 20px;flex:1">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">'
+    + '<div style="background:var(--bg-tertiary);border-radius:10px;padding:12px;text-align:center"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text-tertiary);margin-bottom:4px;font-weight:600">\u0421\u0442\u0430\u0442\u0443\u0441</div><div style="font-size:14px;font-weight:600;color:' + statusColor + '">' + statusLabel + '</div></div>'
+    + '<div style="background:var(--bg-tertiary);border-radius:10px;padding:12px;text-align:center"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text-tertiary);margin-bottom:4px;font-weight:600">\u041f\u0440\u0438\u043e\u0440\u0438\u0442\u0435\u0442</div><div style="font-size:14px;font-weight:600;color:' + priColor + '">' + priLabel + '</div></div>'
+    + '<div style="background:var(--bg-tertiary);border-radius:10px;padding:12px;text-align:center"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text-tertiary);margin-bottom:4px;font-weight:600">\u0421\u0440\u043e\u043a</div><div style="font-size:14px;font-weight:600;color:var(--text-primary)">' + dueText + '</div></div>'
+    + '<div style="background:var(--bg-tertiary);border-radius:10px;padding:12px;text-align:center"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text-tertiary);margin-bottom:4px;font-weight:600">\u0412\u0440\u0435\u043c\u044f</div><div style="font-size:14px;font-weight:600;color:var(--text-primary)">' + timeText + '</div></div>'
+    + '</div>'
+    + descHtml + tagsSection + recurText + childrenHtml
+    + '<div style="margin-top:16px;display:flex;gap:8px">'
+    + '<button id="sp-focus" style="flex:1;padding:10px;background:var(--bg-tertiary);border:1px solid var(--border-soft);border-radius:8px;cursor:pointer;font-size:12px;color:var(--text-primary)">\u26f5 \u0424\u043e\u043a\u0443\u0441</button>'
+    + '<button id="sp-timer" style="flex:1;padding:10px;background:var(--bg-tertiary);border:1px solid var(--border-soft);border-radius:8px;cursor:pointer;font-size:12px;color:var(--text-primary)">\u23f1 \u0422\u0430\u0439\u043c\u0435\u0440</button>'
+    + '</div>'
+    + '</div>';
+
+  panel.dataset.taskId = nodeId;
+  container.appendChild(panel);
+  _graphSidePanel = panel;
+
+  // Inject animation style
+  if (!document.getElementById('sp-anim-style')) {
+    var style = document.createElement('style');
+    style.id = 'sp-anim-style';
+    style.textContent = '@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } #graph-side-panel button:hover { filter: brightness(1.15); }';
+    document.head.appendChild(style);
+  }
+
+  // Event handlers
+  panel.querySelector('#sp-close').onclick = function() { closeGraphSidePanel(); };
+  panel.querySelector('#sp-edit').onclick = function() { closeGraphSidePanel(); openTaskModal(task); };
+  var focusBtn = panel.querySelector('#sp-focus');
+  if (focusBtn) focusBtn.onclick = function() { closeGraphSidePanel(); if (typeof openFocusMode === 'function') openFocusMode(task.id); };
+  var timerBtn = panel.querySelector('#sp-timer');
+  if (timerBtn) timerBtn.onclick = function() {
+    if (typeof timerTaskId !== 'undefined' && timerTaskId === task.id && timerRunning) { pauseTimer(); }
+    else { if (timerRunning) stopTimer(); startTimerForTask(task.id); }
+    if (typeof showToast === 'function') showToast('\u23f1 ' + task.title, 'success', 1500);
+  };
+};
+
+window.closeGraphSidePanel = function() {
+  if (_graphSidePanel) { _graphSidePanel.remove(); _graphSidePanel = null; }
+};
+
+// Close side panel when clicking empty SVG area
+if (typeof setupGraphInteractions === 'function') {
+  var _origSetupInteractions = setupGraphInteractions;
+  window.setupGraphInteractions = function() {
+    _origSetupInteractions();
+    var svg = document.querySelector('#graph-svg');
+    if (svg && !svg._sidePanelClose) {
+      svg._sidePanelClose = true;
+      svg.addEventListener('mousedown', function(e) {
+        if (!e.target.closest('.graph-node')) closeGraphSidePanel();
+      });
+    }
+  };
+}
+
+-->
+</body>
+</html>
