@@ -79,6 +79,9 @@ function setupManualTimeButtons(task) {
         await api('POST', '/time-entries', { taskId: t.id, startTime: Date.now() - mins * 60000, endTime: Date.now(), duration: mins * 60 });
         await api('PUT', '/tasks/' + t.id, { actualTime: t.actualTime });
         $('task-actual-time').textContent = formatTimerTime(t.actualTime);
+        timerSessions.unshift({ taskId: t.id, duration: mins * 60, date: new Date().toISOString() });
+        if (timerSessions.length > 50) timerSessions = timerSessions.slice(0, 50);
+        saveUIPref('timerSessions', timerSessions);
         showToast(`+${mins} мин к задаче`, 'success', 1500);
       } catch (e) { showToast('Ошибка: ' + e.message, 'error'); }
     };
@@ -97,6 +100,9 @@ function setupManualTimeButtons(task) {
         await api('POST', '/time-entries', { taskId: t.id, startTime: Date.now() - mins * 60000, endTime: Date.now(), duration: mins * 60 });
         await api('PUT', '/tasks/' + t.id, { actualTime: t.actualTime });
         $('task-actual-time').textContent = formatTimerTime(t.actualTime);
+        timerSessions.unshift({ taskId: t.id, duration: mins * 60, date: new Date().toISOString() });
+        if (timerSessions.length > 50) timerSessions = timerSessions.slice(0, 50);
+        saveUIPref('timerSessions', timerSessions);
         showToast(`+${mins} мин к задаче`, 'success', 1500);
       } catch (e) { showToast('Ошибка: ' + e.message, 'error'); }
     };
