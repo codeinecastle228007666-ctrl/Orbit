@@ -57,7 +57,7 @@ function hydrateIcons(root) {
 }
 
 /* ═══ STATE ═══ */
-let tasks = [], schedule = {}, notes = [], settings = {}, links = [], activity = [];
+let tasks = [], schedule = {}, notes = [], settings = {}, links = [], activity = [], xpData = {}, achievements = [];
 let currentView = 'dashboard';
 let scheduleDate = todayStr();
 let editingTaskId = null;
@@ -144,6 +144,12 @@ function fmtDate(s) {
   if (diff === 0) return 'Сегодня'; if (diff === 1) return 'Завтра'; if (diff === -1) return 'Вчера';
   if (diff > 0 && diff < 7) return ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getDay()];
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+function formatTimerTime(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 function isOverdue(ds) { return ds && ds < todayStr(); }
 function isToday(ds) { return ds === todayStr(); }

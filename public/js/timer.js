@@ -1,12 +1,5 @@
 /* ═══ Orbit — Timer ═══ */
 
-function formatTimerTime(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
 function formatTimerTimeFull(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -135,6 +128,40 @@ function renderTimerView() {
       <span style="font-size:11px;color:var(--text-tertiary)">${t.estimate || 30}мин</span>
     </div>`;
   }).join('') || '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Нет активных задач</div>';
+
+  // Stats summary
+  const totalSec = tasks.reduce((s, t) => s + (t.actualTime || 0), 0);
+  const todaySessions = timerSessions.filter(s => {
+    const d = new Date(s.date);
+    return d.toDateString() === new Date().toDateString();
+  });
+  const todaySec = todaySessions.reduce((s, sess) => s + sess.duration, 0);
+  const totalDone = tasks.filter(t => t.status === 'done').length;
+  const statHtml = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+    <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--border-soft)">
+      <div style="font-size:18px;font-weight:600;color:var(--accent);font-family:JetBrains Mono,monospace">${formatTimerTime(totalSec)}</div>
+      <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Всего затрекано</div>
+    </div>
+    <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--border-soft)">
+      <div style="font-size:18px;font-weight:600;color:var(--accent);font-family:JetBrains Mono,monospace">${formatTimerTime(todaySec)}</div>
+      <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Сегодня</div>
+    </div>
+    <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--border-soft)">
+      <div style="font-size:18px;font-weight:600;color:var(--accent)">${timerSessions.length}</div>
+      <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Сессий</div>
+    </div>
+    <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--border-soft)">
+      <div style="font-size:18px;font-weight:600;color:var(--accent)">${totalDone}</div>
+      <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Задач готово</div>
+    </div>
+  </div>`;
+  const timerMain = $('timer-main');
+  if (timerMain && !timerMain.querySelector('.timer-stats')) {
+    timerMain.insertAdjacentHTML('afterbegin', `<div class="timer-stats">${statHtml}</div>`);
+  } else {
+    const el = timerMain?.querySelector('.timer-stats');
+    if (el) el.innerHTML = statHtml;
+  }
 
   $('timer-history-list').innerHTML = timerSessions.slice(0, 10).map(s => {
     const t = tasks.find(x => x.id === s.taskId);

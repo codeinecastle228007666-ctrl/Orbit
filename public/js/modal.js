@@ -15,15 +15,8 @@ function openTaskModal(task) {
   if (delBtn) delBtn.style.display = task ? 'inline-flex' : 'none';
   const timerGroup = $('task-timer-group');
   if (timerGroup) timerGroup.style.display = task ? 'block' : 'none';
-  // Timer display in modal
-  if (task && timerTaskId === task.id) {
-    const total = timerElapsed + (timerRunning && timerStartTs ? Math.floor((Date.now() - timerStartTs) / 1000) : 0);
-    $('pomodoro-display').textContent = formatTimerTime(total);
-    $('task-actual-time').textContent = formatTimerTime(task.actualTime || 0);
-  } else if (task) {
-    $('pomodoro-display').textContent = '00:00';
-    $('task-actual-time').textContent = task.actualTime ? formatTimerTime(task.actualTime) : '0 мин';
-  }
+  updateModalTimer(task);
+  setupManualTimeButtons(task);
 
   // Populate parent dropdown
   const parentSel = $('task-parent');
@@ -63,6 +56,53 @@ function openTaskModal(task) {
   };
 }
 
+function updateModalTimer(task) {
+  if (task && timerTaskId === task.id) {
+    const total = timerElapsed + (timerRunning && timerStartTs ? Math.floor((Date.now() - timerStartTs) / 1000) : 0);
+    $('pomodoro-display').textContent = formatTimerTime(total);
+    $('task-actual-time').textContent = formatTimerTime(task.actualTime || 0);
+  } else if (task) {
+    $('pomodoro-display').textContent = '00:00';
+    $('task-actual-time').textContent = formatTimerTime(task.actualTime || 0);
+  }
+}
+
+function setupManualTimeButtons(task) {
+  document.querySelectorAll('.btn-time-add').forEach(btn => {
+    btn.onclick = async () => {
+      if (!editingTaskId) return;
+      const mins = parseInt(btn.dataset.min) || 5;
+      const t = tasks.find(x => x.id === editingTaskId);
+      if (!t) return;
+      t.actualTime = (t.actualTime || 0) + mins * 60;
+      try {
+        await api('POST', '/time-entries', { taskId: t.id, startTime: Date.now() - mins * 60000, endTime: Date.now(), duration: mins * 60 });
+        await api('PUT', '/tasks/' + t.id, { actualTime: t.actualTime });
+        $('task-actual-time').textContent = formatTimerTime(t.actualTime);
+        showToast(`+${mins} мин к задаче`, 'success', 1500);
+      } catch (e) { showToast('Ошибка: ' + e.message, 'error'); }
+    };
+  });
+  const setBtn = document.querySelector('.btn-time-set');
+  if (setBtn) {
+    setBtn.onclick = async () => {
+      if (!editingTaskId) return;
+      const input = $('task-manual-time');
+      const mins = parseInt(input?.value) || 0;
+      if (mins <= 0) return;
+      const t = tasks.find(x => x.id === editingTaskId);
+      if (!t) return;
+      t.actualTime = (t.actualTime || 0) + mins * 60;
+      try {
+        await api('POST', '/time-entries', { taskId: t.id, startTime: Date.now() - mins * 60000, endTime: Date.now(), duration: mins * 60 });
+        await api('PUT', '/tasks/' + t.id, { actualTime: t.actualTime });
+        $('task-actual-time').textContent = formatTimerTime(t.actualTime);
+        showToast(`+${mins} мин к задаче`, 'success', 1500);
+      } catch (e) { showToast('Ошибка: ' + e.message, 'error'); }
+    };
+  }
+}
+
 function closeTaskModal(force) {
   if (!force && window._modalInitialValues) {
     const v = window._modalInitialValues;
@@ -88,6 +128,7 @@ function closeTaskModal(force) {
 async function saveTask() {
   const title = $('task-title').value.trim();
   if (!title) { showToast('Введите название', 'warning'); return; }
+  const currentTask = editingTaskId ? tasks.find(t => t.id === editingTaskId) : null;
   const body = {
     title,
     desc: $('task-desc').value.trim(),
@@ -98,6 +139,7 @@ async function saveTask() {
     tags: $('task-tags').value.split(',').map(t => t.trim()).filter(Boolean),
     parentId: $('task-parent').value || null,
     recurring: $('task-recurring').value || null,
+    actualTime: currentTask ? currentTask.actualTime : 0,
   };
   try {
     if (editingTaskId) {

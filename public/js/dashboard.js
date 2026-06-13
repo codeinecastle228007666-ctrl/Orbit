@@ -6,9 +6,11 @@ function renderDashboard() {
   const total = tasks.length;
   const done = tasks.filter(t => t.status === 'done').length;
   const overdue = tasks.filter(t => t.status !== 'done' && t.dueDate && isOverdue(t.dueDate)).length;
+  const trackedSec = tasks.reduce((s, t) => s + (t.actualTime || 0), 0);
   animateNumber($('stat-total'), total);
   animateNumber($('stat-done'), done);
   animateNumber($('stat-overdue'), overdue);
+  if ($('stat-tracked')) $('stat-tracked').textContent = formatTimerTime(trackedSec);
 
   // Status chart
   const statuses = ['backlog', 'todo', 'review', 'done'];
@@ -44,6 +46,49 @@ function renderDashboard() {
   }).join('') : '<div style="font-size:12px;color:var(--text-tertiary);padding:12px">Нет задач с дедлайном</div>';
 
   renderHeatmap(activity);
+  renderAchievements();
+}
+
+function renderAchievements() {
+  const el = $('ach-dash-content');
+  if (!el) return;
+  const xp = xpData || {};
+  const ach = achievements || [];
+  const levelName = xp.level_name || 'Стажёр';
+  const level = xp.level || 0;
+  const totalXp = xp.total_xp || 0;
+  const progress = xp.progress || 0;
+  const streak = xp.current_streak || 0;
+  const tasksDone = xp.total_tasks_done || 0;
+  const timeTracked = xp.total_time_tracked || 0;
+  const icons = ['⚡', '🌟', '🔥', '💎', '👑', '🚀', '🌌', '🌀'];
+  const icon = icons[Math.min(level, icons.length - 1)];
+
+  let html = `<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div style="font-size:32px;width:56px;height:56px;display:flex;align-items:center;justify-content:center;background:var(--accent-soft);border-radius:14px;flex-shrink:0">${icon}</div>
+    <div style="flex:1;min-width:140px">
+      <div style="font-size:16px;font-weight:600;color:var(--text-primary)">Ур. ${level} · ${esc(levelName)}</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">${totalXp} XP · 🔥 ${streak} дн · 🏆 ${ach.length} ачивок · ⏱ ${formatTimerTime(timeTracked * 60)}</div>
+      <div style="margin-top:8px;height:6px;background:var(--bg-tertiary);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${progress}%;background:linear-gradient(90deg,var(--accent),var(--warning));border-radius:3px;transition:width .6s var(--ease)"></div>
+      </div>
+    </div>
+  </div>`;
+
+  const recentAch = ach.slice(-5).reverse();
+  if (recentAch.length > 0) {
+    html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-soft)">`;
+    recentAch.forEach(a => {
+      html += `<span style="display:flex;align-items:center;gap:4px;padding:4px 10px;background:var(--bg-tertiary);border-radius:6px;font-size:11px;color:var(--text-secondary);border:1px solid var(--border-soft)" title="${esc(a.description || '')}">${a.icon || '🏆'} ${esc(a.name)}</span>`;
+    });
+    html += `</div>`;
+  }
+
+  if (ach.length === 0) {
+    html += `<div style="margin-top:12px;font-size:12px;color:var(--text-tertiary);text-align:center">Выполняйте задачи, чтобы получать достижения</div>`;
+  }
+
+  el.innerHTML = html;
 }
 
 function renderHeatmap(activity) {

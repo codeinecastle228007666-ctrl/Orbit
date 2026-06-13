@@ -48,6 +48,7 @@
         <div class="view-header"><h1>Дашборд</h1><span style="font-size:12px;color:var(--text-secondary)" id="dashboard-date"></span></div>
         <div class="dashboard-grid">
           <div class="stat-card"><div class="stat-icon" data-icon="list"></div><div><div class="stat-value" id="stat-total">0</div><div class="stat-label">Всего задач</div></div></div>
+          <div class="stat-card"><div class="stat-icon" data-icon="clock"></div><div><div class="stat-value" id="stat-tracked" style="font-size:22px;font-family:JetBrains Mono,monospace">0:00</div><div class="stat-label">Затрекано времени</div></div></div>
           <div class="stat-card"><div class="stat-icon" data-icon="check"></div><div><div class="stat-value" id="stat-done">0</div><div class="stat-label">Выполнено</div></div></div>
           <div class="stat-card"><div class="stat-icon" data-icon="alert"></div><div><div class="stat-value" id="stat-overdue">0</div><div class="stat-label">Просрочено</div></div></div>
         </div>
@@ -297,6 +298,14 @@
         <button class="btn btn-icon timer-btn" id="btn-pomodoro-stop" title="Стоп" style="display:none">⏹</button>
         <div class="timer-sep"></div>
         <span class="timer-label">Всего: <strong id="task-actual-time">0 мин</strong></span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-xs btn-time-add" data-min="5">+5мин</button>
+        <button class="btn btn-xs btn-time-add" data-min="15">+15мин</button>
+        <button class="btn btn-xs btn-time-add" data-min="30">+30мин</button>
+        <button class="btn btn-xs btn-time-add" data-min="60">+1ч</button>
+        <input type="number" id="task-manual-time" min="1" max="1440" value="10" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:var(--bg-tertiary);color:var(--text-primary);font-size:11px;font-family:inherit">
+        <button class="btn btn-xs btn-time-set" style="min-width:40px">мин</button>
       </div>
     </div>
     <div class="form-group"><h4 style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-secondary);margin-bottom:10px;font-weight:600">Комментарии</h4><div id="comments-list"></div><div class="comment-input-row"><input type="text" id="comment-input" placeholder="Добавить комментарий..."><button class="btn btn-sm btn-primary" id="btn-add-comment">Отпр.</button></div></div>
