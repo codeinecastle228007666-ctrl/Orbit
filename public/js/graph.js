@@ -768,6 +768,11 @@ function setupGraphInteractions() {
     return { x: (e.clientX - rect.left - gTx.x) / gTx.s, y: (e.clientY - rect.top - gTx.y) / gTx.s };
   }
 
+  if (!window._graphExplored) {
+    window._graphExplored = true;
+    api('POST', '/api/activity/trigger', { trigger: 'graph_pan' }).catch(() => {});
+  }
+
   svg.addEventListener('mousedown', e => {
     if (e.button === 2) return;
     const nodeG = e.target.closest('.graph-node');

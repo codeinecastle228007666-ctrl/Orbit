@@ -93,7 +93,7 @@ app.put('/api/tasks/:id', (req, res) => {
         const ds = dbGet(db, 'SELECT * FROM daily_stats WHERE date = ?', [today]);
         if (ds) dbRun(db, 'UPDATE daily_stats SET tasks_completed = tasks_completed + 1 WHERE date = ?', [today]);
         else dbRun(db, 'INSERT INTO daily_stats (date, tasks_completed, xp_earned, time_tracked, notes_created, tasks_created) VALUES (?, 1, ?, 0, 0, 0)', [today, xpBase + xpBonus]);
-        newAchievements = checkAchievements(db, true);
+        newAchievements = checkAchievements(db, 'task_done');
       }
       task = dbGet(db, 'SELECT * FROM tasks WHERE id = ?', [req.params.id]);
     }
@@ -159,6 +159,14 @@ app.get('/api/activity', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post('/api/activity/trigger', (req, res) => {
+  try {
+    const newAch = checkAchievements(db, req.body?.trigger || 'graph_pan');
+    if (newAch.length) broadcast('achievements', newAch);
+    res.json({ ok: true, new_achievements: newAch });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── SCHEDULE ────────────────────────────────────────────────
 app.get('/api/schedule', (req, res) => {
   try {
@@ -176,7 +184,9 @@ app.post('/api/schedule', (req, res) => {
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     dbRun(db, 'INSERT INTO schedule (id, date, taskId, start, end) VALUES (?, ?, ?, ?, ?)', [id, date, taskId, start, end]);
     logActivity(db, taskId, 'scheduled');
-    res.json({ id, date, taskId, start, end });
+    const xpResult = awardXp(db, 5);
+    const newAch = checkAchievements(db, 'schedule');
+    res.json({ id, date, taskId, start, end, xp: xpResult, new_achievements: newAch });
     broadcast('schedule_changed', { date, taskId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -872,7 +882,7 @@ app.get('/api/achievements', (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-function checkAchievements(db, isTaskCompletion) {
+function checkAchievements(db, trigger) {
   const xp = dbGet(db, 'SELECT * FROM user_xp WHERE id = 1');
   if (!xp) return [];
   const earned = dbAll(db, 'SELECT id FROM achievements');
@@ -885,35 +895,94 @@ function checkAchievements(db, isTaskCompletion) {
     newAchievements.push({ id: aid, name, description: desc, icon, category: cat, earned_at: Date.now() });
   };
   const totalDone = xp.total_tasks_done || 0;
+  const allTasks = dbAll(db, 'SELECT * FROM tasks');
+  const totalCreated = allTasks.length;
+
+  // ── Tasks ──
   if (totalDone >= 1) give('first_blood', 'Первая кровь', 'Выполнить первую задачу', '🩸', 'tasks');
   if (totalDone >= 5) give('five_tasks', 'Пятиборец', 'Выполнить 5 задач', '✋', 'tasks');
   if (totalDone >= 25) give('quarter', 'Четвертак', 'Выполнить 25 задач', '🔢', 'tasks');
   if (totalDone >= 50) give('half_century', 'Полтинник', 'Выполнить 50 задач', '🎱', 'tasks');
   if (totalDone >= 100) give('century', 'Сотня', 'Выполнить 100 задач', '💯', 'tasks');
+  if (totalDone >= 365) give('year', 'Годовой отчёт', 'Выполнить 365 задач', '📆', 'tasks');
+  if (totalCreated >= 10) give('creator10', 'Создатель', 'Создать 10 задач', '✨', 'tasks');
+  if (totalCreated >= 50) give('creator50', 'Фабрика идей', 'Создать 50 задач', '🏭', 'tasks');
+  const childrenCount = allTasks.filter(t => t.parentId).length;
+  if (childrenCount >= 5) give('parent', 'Родитель', 'Создать 5 подзадач', '👨‍👦', 'tasks');
+  if (childrenCount >= 20) give('clan', 'Клан', 'Создать 20 подзадач', '👥', 'tasks');
+
+  // ── Streak ──
+  if (xp.current_streak >= 1) give('first_streak', 'Первый день', '1 день подряд', '🌱', 'streak');
   if (xp.current_streak >= 3) give('streak3', 'Разбег', '3 дня подряд', '🔥', 'streak');
   if (xp.current_streak >= 7) give('streak7', 'Неделя огня', '7 дней подряд', '🔥🔥', 'streak');
   if (xp.current_streak >= 14) give('streak14', 'Железная воля', '14 дней подряд', '💪', 'streak');
   if (xp.current_streak >= 30) give('streak30', 'Несокрушимый', '30 дней подряд', '🦾', 'streak');
+  if (xp.current_streak >= 100) give('streak100', 'Легенда', '100 дней подряд', '🏆', 'streak');
+
+  // ── Level ──
+  if (xp.level >= 1) give('junior', 'Юниор', 'Достичь 1 уровня', '🌟', 'level');
   if (xp.level >= 5) give('lev5', 'Эксперт', 'Достичь 5 уровня', '🎓', 'level');
   if (xp.level >= 10) give('lev10', 'Директор', 'Достичь 10 уровня', '🏢', 'level');
   if (xp.level >= 15) give('lev15', 'Грандмастер', 'Достичь 15 уровня', '👑', 'level');
-  const totalTime = xp.total_time_tracked || 0;
-  if (totalTime >= 6) give('hour1', 'Час работы', 'Затрекать 1 час', '⏱️', 'time');
-  if (totalTime >= 60) give('hour10', '10 часов', 'Затрекать 10 часов', '⏰', 'time');
-  if (isTaskCompletion) {
+  if (xp.level >= 20) give('myth', 'Мифический', 'Достичь 20 уровня', '🌀', 'level');
+
+  // ── Time ──
+  const totalTimeMinutes = (xp.total_time_tracked || 0) * 10;
+  if (totalTimeMinutes >= 30) give('half_hour', 'Полчаса', 'Затрекать 30 минут', '⏱️', 'time');
+  if (totalTimeMinutes >= 60) give('hour1', 'Час работы', 'Затрекать 1 час', '⏰', 'time');
+  if (totalTimeMinutes >= 600) give('hour10', '10 часов', 'Затрекать 10 часов', '📊', 'time');
+  if (totalTimeMinutes >= 3000) give('hour50', '50 часов', 'Затрекать 50 часов', '💼', 'time');
+  if (totalTimeMinutes >= 10000) give('hour167', 'Сто часов', 'Затрекать 100 часов', '🎯', 'time');
+
+  if (trigger === 'task_done') {
     const hour = new Date().getHours();
     if (hour >= 22 || hour < 5) give('owl', 'Сова', 'Завершить задачу ночью', '🦉', 'time');
     if (hour >= 5 && hour < 8) give('lark', 'Жаворонок', 'Завершить задачу утром', '🌅', 'time');
+    if (hour >= 12 && hour <= 13) give('lunch', 'Обеденный подвиг', 'Завершить задачу в обед', '🍔', 'time');
   }
-  const allTasks = dbAll(db, 'SELECT * FROM tasks');
+
+  // ── Tags ──
   const allTags = new Set();
   allTasks.forEach(t => { JSON.parse(t.tags || '[]').forEach(tg => allTags.add(tg)); });
-  if (allTags.size >= 10) give('collector', 'Коллекционер', '10+ тегов', '🏷️', 'tags');
+  if (allTags.size >= 3) give('tagger', 'Меткий', '3+ тегов', '🏷️', 'tags');
+  if (allTags.size >= 10) give('collector', 'Коллекционер', '10+ тегов', '📚', 'tags');
+  if (allTags.size >= 25) give('librarian', 'Библиотекарь', '25+ тегов', '🗂️', 'tags');
+
+  // ── Links ──
   const links = dbAll(db, 'SELECT * FROM task_links');
-  if (links.length >= 10) give('networker', 'Сетевик', '10+ связей', '🔗', 'links');
+  if (links.length >= 1) give('first_link', 'Первая связь', 'Создать первую связь', '🔗', 'links');
+  if (links.length >= 10) give('networker', 'Сетевик', '10+ связей', '🕸️', 'links');
+  if (links.length >= 50) give('spider', 'Паук', '50+ связей', '🕷️', 'links');
+
+  // ── Notes ──
   const notes = dbAll(db, 'SELECT * FROM notes');
   if (notes.length >= 1) give('first_note', 'Первая заметка', 'Создать первую заметку', '📄', 'notes');
   if (notes.length >= 10) give('thinker', 'Мыслитель', '10+ заметок', '🧠', 'notes');
+  if (notes.length >= 50) give('writer', 'Писатель', '50+ заметок', '✍️', 'notes');
+
+  // ── Schedule ──
+  if (trigger === 'schedule') give('planner', 'Планировщик', 'Добавить задачу в расписание', '📅', 'schedule');
+
+  // ── Graph ──
+  if (trigger === 'graph_pan') give('explorer', 'Исследователь графа', 'Осмотреть граф', '🗺️', 'graph');
+
+  // ── Sessions ──
+  const sessions = dbAll(db, 'SELECT * FROM time_entries');
+  if (sessions.length >= 5) give('sessions5', 'Фокус', '5 сессий таймера', '🎯', 'sessions');
+  if (sessions.length >= 25) give('sessions25', 'Машина времени', '25 сессий таймера', '⏳', 'sessions');
+  if (sessions.length >= 100) give('sessions100', 'Хранитель времени', '100 сессий таймера', '⌛', 'sessions');
+
+  // ── Streak within day (completed today) ──
+  const today = new Date().toISOString().slice(0, 10);
+  const doneToday = allTasks.filter(t => t.status === 'done' && t.updatedAt && new Date(t.updatedAt).toISOString().slice(0, 10) === today).length;
+  if (doneToday >= 3) give('triska', 'Трёшка', '3 задачи за день', '3️⃣', 'daily');
+  if (doneToday >= 7) give('weekly', 'Ударный день', '7 задач за день', '7️⃣', 'daily');
+  if (doneToday >= 15) give('marathon', 'Марафонец', '15 задач за день', '🏃', 'daily');
+
+  // ── Hidden ──
+  if (trigger === 'hidden_panic') give('panic', 'Паническая кнопка', 'Нажать кнопку помощи', '🆘', 'hidden');
+  if (trigger === 'hidden_midnight') give('midnight', 'Полуночник', 'Работать после полуночи', '🌙', 'hidden');
+
   return newAchievements;
 }
 

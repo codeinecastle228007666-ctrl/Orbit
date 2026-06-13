@@ -311,6 +311,7 @@ function initEvents() {
 }
 
 function showHelp() {
+  api('POST', '/api/activity/trigger', { trigger: 'hidden_panic' }).catch(() => {});
   const overlay = document.createElement('div');
   overlay.className = 'confirm-overlay';
   overlay.style.cssText = 'z-index:300';
