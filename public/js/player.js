@@ -1,7 +1,50 @@
-/* ═══ Orbit — Focus Player (Music) ═══ */
+/* ═══ PTM — Focus Player ═══ */
 
 let audioCtx = null, currentPlayerTrack = null, playerPlaying = false, playerVolume = 0.4;
 let playerSources = [], playerPanel = null;
+let playerMode = 'synth'; // 'synth' | 'youtube'
+let ytPlayer = null, ytReady = false, ytPendingStart = false;
+
+function extractYoutubeId(url) {
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function loadYtApi(cb) {
+  if (window.YT && window.YT.Player) { cb(); return; }
+  if (window._ytLoading) return;
+  window._ytLoading = true;
+  const tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+  window.onYouTubeIframeAPIReady = cb;
+}
+
+function initYtPlayer(videoId, callback) {
+  const container = playerPanel.querySelector('#fp-yt-container');
+  if (!container) return;
+  container.innerHTML = '<div id="fp-yt-embed"></div>';
+  ytPlayer = new YT.Player('fp-yt-embed', {
+    height: '80',
+    width: '100%',
+    videoId: videoId,
+    playerVars: { autoplay: 0, controls: 1, modestbranding: 1, rel: 0, showinfo: 0 },
+    events: {
+      onReady: () => { ytReady = true; if (ytPendingStart) { ytPlayer.playVideo(); ytPendingStart = false; } if (callback) callback(); },
+      onStateChange: (e) => {
+        if (e.data === YT.PlayerState.PLAYING) {
+          playerPlaying = true;
+          playerPanel.querySelector('#fp-play').textContent = '⏸️';
+          playerPanel.querySelector('#fp-now').textContent = '▶ ' + (ytPlayer.getVideoData().title || 'YouTube');
+        } else if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) {
+          playerPlaying = false;
+          playerPanel.querySelector('#fp-play').textContent = '▶️';
+          if (e.data === YT.PlayerState.ENDED) playerPanel.querySelector('#fp-now').textContent = '⏹ Завершено';
+        }
+      }
+    }
+  });
+}
 
 const TRACKS = [
   { id:'lofi1', name:'Lo-fi Chill', icon:'🎵', desc:'Мягкий lo-fi бит', color:'#e0b05c',
@@ -142,6 +185,11 @@ function buildPlayerPanel() {
   playerPanel.innerHTML = `<div class="fp-header"><span>🎧 Фокус-плеер</span><div><button id="fp-mini-btn" style="background:none;border:none;color:var(--text-secondary);font-size:18px;cursor:pointer;padding:0 6px">−</button><button id="fp-close-btn" style="background:none;border:none;color:var(--text-secondary);font-size:16px;cursor:pointer">×</button></div></div>
     <div id="fp-visualizer">${'<div class="vis-bar"></div>'.repeat(20)}</div>
     <div class="fp-tracks" id="fp-tracks"></div>
+    <div id="fp-yt-row" style="display:flex;gap:6px;padding:4px 0;margin-bottom:6px">
+      <input id="fp-yt-input" type="text" placeholder="YouTube URL..." style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text-primary);font-size:11px;font-family:inherit;outline:none">
+      <button id="fp-yt-btn" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;font-size:11px">▶</button>
+    </div>
+    <div id="fp-yt-container" style="margin-bottom:6px;border-radius:8px;overflow:hidden;display:none"></div>
     <div class="fp-controls">
       <button id="fp-prev">⏮</button>
       <button id="fp-play" style="background:var(--accent);color:#1a1815;font-weight:600;flex:1">▶️</button>
@@ -160,27 +208,71 @@ function buildPlayerPanel() {
     tracksEl.appendChild(row);
   });
 
-  playerPanel.querySelector('#fp-prev').onclick = () => { const idx = (currentPlayerTrack || 0) - 1 + TRACKS.length; playTrack(idx % TRACKS.length); };
+  // YouTube input
+  playerPanel.querySelector('#fp-yt-btn').onclick = () => loadYoutubeUrl();
+  playerPanel.querySelector('#fp-yt-input').addEventListener('keydown', e => { if (e.key === 'Enter') loadYoutubeUrl(); });
+
+  playerPanel.querySelector('#fp-prev').onclick = () => { if (playerMode === 'youtube') return; const idx = (currentPlayerTrack || 0) - 1 + TRACKS.length; playTrack(idx % TRACKS.length); };
   playerPanel.querySelector('#fp-play').onclick = togglePlay;
-  playerPanel.querySelector('#fp-next').onclick = () => { const idx = (currentPlayerTrack || 0) + 1; playTrack(idx % TRACKS.length); };
+  playerPanel.querySelector('#fp-next').onclick = () => { if (playerMode === 'youtube') return; const idx = (currentPlayerTrack || 0) + 1; playTrack(idx % TRACKS.length); };
   playerPanel.querySelector('#fp-volume').oninput = function () { setVolume(parseInt(this.value) / 100); };
-  playerPanel.querySelector('#fp-close-btn').onclick = () => { stopAudio(); playerPanel.style.display = 'none'; };
+  playerPanel.querySelector('#fp-close-btn').onclick = () => {
+    stopAudio();
+    playerMode = 'synth';
+    ytPlayer = null; ytReady = false; ytPendingStart = false;
+    const c = playerPanel.querySelector('#fp-yt-container');
+    if (c) { c.style.display = 'none'; c.innerHTML = ''; }
+    const vis = playerPanel.querySelector('#fp-visualizer');
+    if (vis) vis.style.display = 'flex';
+    playerPanel.style.display = 'none';
+  };
   playerPanel.querySelector('#fp-mini-btn').onclick = () => { playerPanel.classList.toggle('mini'); };
   playerPanel.style.display = 'none';
   startVisualizer();
 }
 
+function loadYoutubeUrl() {
+  const input = playerPanel.querySelector('#fp-yt-input');
+  const url = input.value.trim();
+  const vid = extractYoutubeId(url);
+  if (!vid) { showToast('Неверная YouTube ссылка', 'error'); return; }
+  stopAudio();
+  playerMode = 'youtube';
+  const container = playerPanel.querySelector('#fp-yt-container');
+  container.style.display = 'block';
+  playerPanel.querySelector('#fp-visualizer').style.display = 'none';
+  playerPanel.querySelectorAll('.fp-track-row').forEach(r => { r.style.background = 'var(--bg-tertiary)'; r.style.borderColor = 'var(--border-soft)'; });
+  loadYtApi(() => initYtPlayer(vid));
+  playerPanel.querySelector('#fp-play').textContent = '▶️';
+  playerPanel.querySelector('#fp-now').textContent = '⏳ Загрузка YouTube...';
+  showToast('🎬 YouTube загружается', 'success');
+}
+
 function stopAudio() {
+  if (playerMode === 'youtube' && ytPlayer && ytReady) {
+    try { ytPlayer.pauseVideo(); } catch (_) {}
+    ytPendingStart = false;
+  }
   playerPlaying = false;
   playerSources.forEach(node => {
-    try { if (node.type === 'osc' || node.type === 'src') node.ref.stop(); else if (node.type === 'interval') clearInterval(node.ref); } catch (_) {}
+    try {
+      if (node.type === 'interval') clearInterval(node.ref);
+      else if (node.ref && typeof node.ref.stop === 'function') { node.ref.stop(); }
+    } catch (_) {}
   });
   playerSources = [];
-  if (audioCtx && audioCtx.state !== 'closed') audioCtx.close().catch(() => {});
+  if (audioCtx && audioCtx.state !== 'closed') { try { audioCtx.close(); } catch (_) {} }
   audioCtx = null;
 }
 
 function playTrack(index) {
+  playerMode = 'synth';
+  const container = playerPanel.querySelector('#fp-yt-container');
+  if (container) { container.style.display = 'none'; container.innerHTML = ''; }
+  const vis = playerPanel.querySelector('#fp-visualizer');
+  if (vis) vis.style.display = 'flex';
+  ytPlayer = null; ytReady = false; ytPendingStart = false;
+
   stopAudio();
   playerPlaying = true;
   currentPlayerTrack = index;
@@ -198,14 +290,36 @@ function playTrack(index) {
 }
 
 function togglePlay() {
+  if (playerMode === 'youtube') {
+    if (!ytPlayer || !ytReady) return;
+    if (playerPlaying) { ytPlayer.pauseVideo(); }
+    else { ytPlayer.playVideo(); }
+    return;
+  }
   if (currentPlayerTrack === null) { playTrack(0); return; }
-  if (playerPlaying) { playerPlaying = false; playerPanel.querySelector('#fp-play').textContent = '▶️'; playerPanel.querySelector('#fp-now').textContent = '⏸ Пауза'; }
+  if (playerPlaying) { stopAudio(); playerPanel.querySelector('#fp-play').textContent = '▶️'; playerPanel.querySelector('#fp-now').textContent = '⏸ Пауза'; }
   else { playTrack(currentPlayerTrack); }
 }
 
 function setVolume(v) {
   playerVolume = Math.max(0, Math.min(1, v));
-  if (playerPlaying && currentPlayerTrack !== null) { const idx = currentPlayerTrack; stopAudio(); playerPlaying = true; audioCtx = new (window.AudioContext || window.webkitAudioContext)(); playerSources = TRACKS[idx].create(audioCtx, playerVolume); }
+  if (playerMode === 'synth' && playerPlaying && currentPlayerTrack !== null) {
+    const idx = currentPlayerTrack;
+    playerPlaying = false;
+    playerSources.forEach(node => {
+      try {
+        if (node.type === 'interval') clearInterval(node.ref);
+        else if (node.ref && typeof node.ref.stop === 'function') { node.ref.stop(); }
+      } catch (_) {}
+    });
+    playerSources = [];
+    playerPlaying = true;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      playerSources = TRACKS[idx].create(audioCtx, playerVolume);
+    } catch (e) { playerPlaying = false; }
+  }
+  // YouTube volume handled by iframe player controls
 }
 
 let visAnimFrame = null;
@@ -214,14 +328,14 @@ function startVisualizer() {
     const bars = document.querySelectorAll('#fp-visualizer .vis-bar');
     if (!bars.length || !playerPanel || playerPanel.style.display === 'none') { visAnimFrame = null; return; }
     bars.forEach((bar, i) => {
-      if (playerPlaying) {
+      if (playerPlaying && playerMode === 'synth') {
         const base = 4 + Math.random() * 6;
         const beat = Math.sin(Date.now() * 0.003 + i * 0.4) * 0.5 + 0.5;
         bar.style.height = (base + beat * (16 + Math.random() * 8)) + 'px';
         bar.style.background = TRACKS[currentPlayerTrack]?.color || 'var(--accent)';
         bar.style.opacity = '0.6';
       } else {
-        bar.style.height = (2 + Math.sin(Date.now() * 0.001 + i * 0.3)) + 'px';
+        bar.style.height = (playerMode === 'youtube' ? 0 : 2 + Math.sin(Date.now() * 0.001 + i * 0.3)) + 'px';
         bar.style.background = 'var(--text-tertiary)';
         bar.style.opacity = '0.3';
       }

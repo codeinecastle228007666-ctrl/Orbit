@@ -17,7 +17,7 @@ async function renderProfile() {
       { label: 'Лучший стрик', value: (xpData.best_streak || 0) + ' дн', icon: '🔥' },
       { label: 'Выполнено задач', value: xpData.total_tasks_done || 0, icon: '✅' },
       { label: 'Времени (мин)', value: timeMin, icon: '⏱️' },
-      { label: 'Дней в CRM', value: xpData.crm_days_active || 0, icon: '📅' },
+      { label: 'Дней в PTM', value: xpData.ptm_days_active || 0, icon: '📅' },
       { label: 'Достижений', value: achData.length, icon: '🏆' },
     ].map(s => `<div style="background:var(--bg-secondary);border-radius:12px;padding:16px 18px;border:1px solid var(--border-soft);box-shadow:var(--shadow);display:flex;align-items:center;gap:12px">
       <span style="font-size:24px">${s.icon}</span>

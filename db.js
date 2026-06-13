@@ -12,10 +12,10 @@ async function initDb() {
   let db;
 
   // Try to copy existing database if V2 DB doesn't exist
-  if (!fs.existsSync(DB_PATH)) {
-    const oldDbPath = path.join(__dirname, '..', 'crm-daily-app', 'data', 'crm-daily.db');
+    if (!fs.existsSync(DB_PATH)) {
+    const oldDbPath = path.join(__dirname, '..', 'ptm-daily-app', 'data', 'ptm-daily.db');
     if (fs.existsSync(oldDbPath)) {
-      console.log('📋 Копируем базу данных из crm-daily-app...');
+      console.log('📋 Копируем базу данных из ptm-daily-app...');
       const oldBuffer = fs.readFileSync(oldDbPath);
       fs.writeFileSync(DB_PATH, oldBuffer);
       console.log('✅ База данных скопирована! Все задачи перенесены.');
@@ -145,7 +145,7 @@ async function initDb() {
     last_active_date TEXT DEFAULT '',
     total_tasks_done INTEGER DEFAULT 0,
     total_time_tracked INTEGER DEFAULT 0,
-    crm_days_active INTEGER DEFAULT 0,
+    ptm_days_active INTEGER DEFAULT 0,
     updatedAt INTEGER NOT NULL DEFAULT 0
   )`);
 
@@ -198,10 +198,20 @@ async function initDb() {
     if (!names.includes('favorite')) db.run("ALTER TABLE tasks ADD COLUMN favorite INTEGER DEFAULT 0");
   }
 
+  // Migration: rename crm_days_active → ptm_days_active
+  const xpCols = db.exec("PRAGMA table_info(user_xp)");
+  if (xpCols.length) {
+    const xpNames = xpCols[0].values.map(v => v[1]);
+    if (xpNames.includes('crm_days_active') && !xpNames.includes('ptm_days_active')) {
+      db.run("ALTER TABLE user_xp ADD COLUMN ptm_days_active INTEGER DEFAULT 0");
+      db.run("UPDATE user_xp SET ptm_days_active = crm_days_active");
+    }
+  }
+
   // Seed user_xp
   const xpCount = db.exec("SELECT COUNT(*) as c FROM user_xp");
   if (!xpCount.length || !xpCount[0].values.length || xpCount[0].values[0][0] === 0) {
-    db.run('INSERT INTO user_xp (total_xp, level, current_streak, best_streak, last_active_date, total_tasks_done, total_time_tracked, crm_days_active, updatedAt) VALUES (0, 0, 0, 0, \'\', 0, 0, 0, ?)', [Date.now()]);
+    db.run('INSERT INTO user_xp (total_xp, level, current_streak, best_streak, last_active_date, total_tasks_done, total_time_tracked, ptm_days_active, updatedAt) VALUES (0, 0, 0, 0, \'\', 0, 0, 0, ?)', [Date.now()]);
   }
 
   // Seed default settings

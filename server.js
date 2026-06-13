@@ -754,7 +754,7 @@ app.post('/api/ai/chat', async (req, res) => {
     if (!aiKey || aiKey.length < 10) return res.json({ reply: 'API-ключ OpenRouter не настроен. Добавьте ключ в Настройки.', source: 'local' });
     const allTasks = dbAll(db, 'SELECT * FROM tasks ORDER BY createdAt DESC');
     const today = new Date().toISOString().slice(0, 10);
-    const context = `Ты — AI-ассистент CRM. Отвечай кратко, по-русски.\nДата: ${today}\nВсего задач: ${allTasks.length}\nВыполнено: ${allTasks.filter(t => t.status === 'done').length}\nВ работе: ${allTasks.filter(t => t.status === 'todo').length}\nПросрочено: ${allTasks.filter(t => t.dueDate && t.dueDate < today && t.status !== 'done').length}\n\nЗадачи:\n${allTasks.slice(0, 50).map(t => `[${t.status}] "${t.title}" (приоритет:${t.priority}, срок:${t.dueDate || 'нет'})`).join('\n')}\n\nВопрос: ${message.trim()}`;
+    const context = `Ты — AI-ассистент PTM. Отвечай кратко, по-русски.\nДата: ${today}\nВсего задач: ${allTasks.length}\nВыполнено: ${allTasks.filter(t => t.status === 'done').length}\nВ работе: ${allTasks.filter(t => t.status === 'todo').length}\nПросрочено: ${allTasks.filter(t => t.dueDate && t.dueDate < today && t.status !== 'done').length}\n\nЗадачи:\n${allTasks.slice(0, 50).map(t => `[${t.status}] "${t.title}" (приоритет:${t.priority}, срок:${t.dueDate || 'нет'})`).join('\n')}\n\nВопрос: ${message.trim()}`;
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + aiKey },
       body: JSON.stringify({ model: 'google/gemini-2.0-flash-exp:free', messages: [{ role: 'user', content: context }], temperature: 0.5, max_tokens: 1500 }),
@@ -887,7 +887,7 @@ function getXpForNext(level) {
 
 function awardXp(db, amount) {
   let xp = dbGet(db, 'SELECT * FROM user_xp WHERE id = 1');
-  if (!xp) { dbRun(db, 'INSERT INTO user_xp (id, total_xp, level, current_streak, best_streak, last_active_date, total_tasks_done, total_time_tracked, crm_days_active, updatedAt) VALUES (1, 0, 0, 0, 0, \'\', 0, 0, 0, ?)', [Date.now()]); xp = { total_xp: 0, level: 0, current_streak: 0, best_streak: 0, last_active_date: '', total_tasks_done: 0, total_time_tracked: 0, crm_days_active: 0 }; }
+  if (!xp) { dbRun(db, 'INSERT INTO user_xp (id, total_xp, level, current_streak, best_streak, last_active_date, total_tasks_done, total_time_tracked, ptm_days_active, updatedAt) VALUES (1, 0, 0, 0, 0, \'\', 0, 0, 0, ?)', [Date.now()]); xp = { total_xp: 0, level: 0, current_streak: 0, best_streak: 0, last_active_date: '', total_tasks_done: 0, total_time_tracked: 0, ptm_days_active: 0 }; }
   const newTotal = (xp.total_xp || 0) + amount;
   const lv = getLevel(newTotal);
   const today = new Date().toISOString().slice(0, 10);
@@ -897,9 +897,9 @@ function awardXp(db, amount) {
   else if (xp.last_active_date === yesterday) streak++;
   else streak = 1;
   const bestStreak = Math.max(streak, xp.best_streak || 0);
-  const crmDays = (xp.crm_days_active || 0) + (xp.last_active_date === today ? 0 : 1);
-  dbRun(db, 'UPDATE user_xp SET total_xp=?, level=?, current_streak=?, best_streak=?, last_active_date=?, crm_days_active=?, updatedAt=? WHERE id=1',
-    [newTotal, lv.level, streak, bestStreak, today, crmDays, Date.now()]);
+  const ptmDays = (xp.ptm_days_active || 0) + (xp.last_active_date === today ? 0 : 1);
+  dbRun(db, 'UPDATE user_xp SET total_xp=?, level=?, current_streak=?, best_streak=?, last_active_date=?, ptm_days_active=?, updatedAt=? WHERE id=1',
+    [newTotal, lv.level, streak, bestStreak, today, ptmDays, Date.now()]);
   const ds = dbGet(db, 'SELECT * FROM daily_stats WHERE date = ?', [today]);
   if (ds) dbRun(db, 'UPDATE daily_stats SET xp_earned = xp_earned + ? WHERE date = ?', [amount, today]);
   else dbRun(db, 'INSERT INTO daily_stats (date, tasks_completed, xp_earned, time_tracked, notes_created, tasks_created) VALUES (?, 0, ?, 0, 0, 0)', [today, amount]);
@@ -916,7 +916,7 @@ function logProductivity(db, taskId, task) {
 app.get('/api/xp', (req, res) => {
   try {
     let xp = dbGet(db, 'SELECT * FROM user_xp WHERE id = 1');
-    if (!xp) return res.json({ total_xp: 0, level: 0, level_name: 'Стажёр', progress: 0, next_level_xp: 50, current_streak: 0, best_streak: 0, total_tasks_done: 0, total_time_tracked: 0, crm_days_active: 0 });
+    if (!xp) return res.json({ total_xp: 0, level: 0, level_name: 'Стажёр', progress: 0, next_level_xp: 50, current_streak: 0, best_streak: 0, total_tasks_done: 0, total_time_tracked: 0, ptm_days_active: 0 });
     const lv = getLevel(xp.total_xp || 0);
     const nextXp = getXpForNext(lv.level);
     const prevXp = lv.xp;
@@ -1133,7 +1133,7 @@ async function start() {
   db = await initDb();
   startAutoBackup(db);
   const server = app.listen(PORT, () => {
-    console.log(`\n🚀 CRM V2 запущен на http://localhost:${PORT}`);
+    console.log(`\n🚀 PTM запущен на http://localhost:${PORT}`);
     console.log(`📊 База данных: ${db ? 'OK' : 'ERROR'}`);
     console.log(`🎯 Нажмите Ctrl+C для остановки\n`);
   });

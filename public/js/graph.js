@@ -318,23 +318,15 @@ function buildGraphData() {
   const w = container?.clientWidth || 800;
   const h = container?.clientHeight || 600;
 
-  const statusOrder = ['backlog', 'todo', 'review', 'done'];
-  const statusAngles = { backlog: -Math.PI * 0.75, todo: -Math.PI * 0.25, review: Math.PI * 0.25, done: Math.PI * 0.75 };
   const statusCounts = {};
-  statusOrder.forEach(s => statusCounts[s] = 0);
+  ['backlog','todo','review','done'].forEach(s => statusCounts[s] = 0);
 
   tasks.forEach((t, i) => {
-    const baseAngle = statusAngles[t.status] || 0;
-    const idxInStatus = statusCounts[t.status] || 0;
-    statusCounts[t.status] = idxInStatus + 1;
-    const spread = 0.4;
-    const angle = baseAngle + (idxInStatus - (tasks.filter(x => x.status === t.status).length - 1) / 2) * 0.15 + (Math.random() - 0.5) * spread;
-    const radius = 100 + Math.random() * 60 + idxInStatus * 8;
+    statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
     const node = {
       id: t.id, label: t.title, type: 'task', status: t.status, priority: t.priority,
       tags: t.tags || [],
-      x: w / 2 + Math.cos(angle) * radius + (Math.random() - 0.5) * 15,
-      y: h / 2 + Math.sin(angle) * radius + (Math.random() - 0.5) * 15,
+      x: 0, y: 0,
       size: t.status === 'done' ? 5 : t.priority === 'high' ? 10 : 7,
       vx: 0, vy: 0
     };
@@ -359,7 +351,7 @@ function buildGraphData() {
   }
 }
 
-/* ── Force-directed layout ── */
+/* ── Force-directed layout (status clusters) ── */
 function forceLayout(onDone) {
   const n = gNodes.length;
   if (n === 0) { if (onDone) onDone(); return; }
@@ -368,19 +360,35 @@ function forceLayout(onDone) {
   const W = container?.clientWidth || 800;
   const H = container?.clientHeight || 600;
 
-  // Initial placement: circular layout (like old project)
-  const cx = W / 2, cy = H / 2;
-  const r = Math.min(W, H) * 0.35;
+  // Status cluster centers (quadrants)
+  const clusterCenters = {
+    backlog:  { x: W * 0.25, y: H * 0.25 },
+    todo:     { x: W * 0.75, y: H * 0.25 },
+    review:   { x: W * 0.25, y: H * 0.75 },
+    done:     { x: W * 0.75, y: H * 0.75 }
+  };
+  const clusterSpread = 30;
+
+  // Group nodes by status
+  const statusGroups = {};
+  gNodes.forEach(nd => {
+    const s = nd.status || 'backlog';
+    if (!statusGroups[s]) statusGroups[s] = [];
+    statusGroups[s].push(nd);
+  });
+
+  // Place each status group in its cluster region
   gNodes.forEach((nd, i) => {
-    const a = (2 * Math.PI * i) / Math.max(n, 1) + (Math.random() - 0.5) * 0.3;
-    nd.x = cx + r * Math.cos(a) + (Math.random() - 0.5) * 40;
-    nd.y = cy + r * Math.sin(a) + (Math.random() - 0.5) * 40;
+    const center = clusterCenters[nd.status] || clusterCenters.backlog;
+    const angle = Math.random() * Math.PI * 2;
+    const radius = clusterSpread + Math.random() * 40;
+    nd.x = center.x + Math.cos(angle) * radius + (Math.random() - 0.5) * 15;
+    nd.y = center.y + Math.sin(angle) * radius + (Math.random() - 0.5) * 15;
     nd._vx = 0; nd._vy = 0;
   });
 
-  // Force-directed physics similar to old project:
-  //   repulsion: 8000/dist², attraction: spring to targetLen, damping 0.9, cooling over 180 iters
-  const targetLen = 160;
+  // Force-directed physics with cluster centering
+  const targetLen = 140;
   const repulsionStrength = 8000;
   const attractionStrength = 0.06;
   const dampingBase = 0.9;
@@ -416,10 +424,11 @@ function forceLayout(onDone) {
       b._vx -= fx; b._vy -= fy;
     }
 
-    // Weak centering
+    // Cluster-specific centering (nodes pulled toward their status group center)
     for (const n of gNodes) {
-      n._vx += (cx - n.x) * 0.0005 * cool;
-      n._vy += (cy - n.y) * 0.0005 * cool;
+      const cc = clusterCenters[n.status] || clusterCenters.backlog;
+      n._vx += (cc.x - n.x) * 0.0008 * cool;
+      n._vy += (cc.y - n.y) * 0.0008 * cool;
     }
 
     // Apply velocity with damping & cooling
