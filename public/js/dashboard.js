@@ -99,9 +99,11 @@ function renderHeatmap(activity) {
   const actMap = {};
   if (Array.isArray(activity)) {
     activity.forEach(a => {
-      const d = new Date(a.date);
+      if (!a.timestamp) return;
+      const d = new Date(a.timestamp);
+      if (isNaN(d.getTime())) return;
       const key = d.getDay() + ':' + d.getHours();
-      actMap[key] = (actMap[key] || 0) + (a.count || 0);
+      actMap[key] = (actMap[key] || 0) + 1;
     });
   }
   const vals = Object.values(actMap);
