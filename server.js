@@ -309,7 +309,10 @@ app.put('/api/time-entries/:id', (req, res) => {
     const deltaSeconds = Math.max(0, (newDuration || 0) - (existing.duration || 0));
     const xpMinutes = Math.floor(deltaSeconds / 600);
     let xpResult = null;
-    if (xpMinutes > 0) xpResult = awardXp(db, xpMinutes);
+    if (xpMinutes > 0) {
+      xpResult = awardXp(db, xpMinutes);
+      dbRun(db, 'UPDATE user_xp SET total_time_tracked = total_time_tracked + ? WHERE id = 1', [xpMinutes]);
+    }
     const newAch = checkAchievements(db);
     res.json({ ...dbGet(db, 'SELECT * FROM time_entries WHERE id = ?', [req.params.id]), xp: xpResult, new_achievements: newAch });
   } catch (e) { res.status(500).json({ error: e.message }); }
