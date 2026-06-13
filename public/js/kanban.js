@@ -74,6 +74,7 @@ function renderKanbanCard(t, isChild) {
       <span class="timer-time">${timerState ? timerTime : (t.actualTime ? formatTimerTime(t.actualTime) : '0:00')}</span>
       <button class="btn-card-timer-toggle" title="${timerState ? 'Пауза' : 'Старт'}">${timerState ? '⏸' : '▶'}</button>
       ${timerTaskId === t.id && timerElapsed > 0 ? `<button class="btn-card-timer-stop" title="Стоп">⏹</button>` : ''}
+      <button class="btn-card-queue-toggle" title="В очередь" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:11px;padding:2px 4px;border-radius:4px">${isInTimerQueue(t.id) ? '📋' : '📄'}</button>
     </div>
   </div>`;
 }

@@ -6,9 +6,9 @@ function initEvents() {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
 
-  // Theme toggle
-  $('theme-toggle').addEventListener('change', function () {
-    settings.theme = this.checked ? 'dark' : 'light';
+  // Theme select
+  $('theme-select').addEventListener('change', function () {
+    settings.theme = this.value;
     applyTheme();
     api('PUT', '/settings', { theme: settings.theme }).catch(() => {});
   });
@@ -301,6 +301,7 @@ function initEvents() {
         if (btn.matches('.btn-card-timer-toggle')) { toggleCardTimer(task.id); return; }
         if (btn.matches('.btn-card-timer-stop')) { stopCardTimer(); return; }
         if (btn.matches('.btn-card-focus')) { focusGraphTask(task.id); return; }
+        if (btn.matches('.btn-card-queue-toggle')) { toggleTimerQueue(task.id); renderKanban(); return; }
       }
       openTaskModal(task);
     }, true);

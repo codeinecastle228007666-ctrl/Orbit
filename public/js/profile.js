@@ -77,15 +77,24 @@ async function renderProfile() {
       { id:'ach_midnight', name:'Полуночник', desc:'Работать после полуночи', icon:'🌙', cat:'hidden' },
       { id:'ach_ai_scheduler', name:'AI-планировщик', desc:'Использовать AI-расписание', icon:'🤖', cat:'ai' },
       { id:'ach_ai_chat', name:'Диалог с AI', desc:'Написать AI-ассистенту', icon:'💬', cat:'ai' },
+      { id:'ach_ai_organize', name:'AI-организатор', desc:'Использовать AI-организацию графа', icon:'🔮', cat:'ai' },
       { id:'ach_recurring1', name:'Цикличность', desc:'Создать повторяющуюся задачу', icon:'🔁', cat:'recurring' },
       { id:'ach_recurring5', name:'Ритм', desc:'5+ повторяющихся задач', icon:'🔄', cat:'recurring' },
+      { id:'ach_first_comment', name:'Комментатор', desc:'Добавить первый комментарий', icon:'💬', cat:'comments' },
+      { id:'ach_chatterbox', name:'Болтун', desc:'10+ комментариев', icon:'🗣️', cat:'comments' },
+      { id:'ach_daily_note', name:'Ежедневка', desc:'Создать первую ежедневную заметку', icon:'📓', cat:'notes' },
+      { id:'ach_favorited', name:'Избранное', desc:'Добавить задачу в избранное', icon:'⭐', cat:'tasks' },
+      { id:'ach_favorited5', name:'Коллекция', desc:'5 задач в избранном', icon:'🌟', cat:'tasks' },
+      { id:'ach_on_time', name:'В срок', desc:'Выполнить задачу до дедлайна', icon:'⏰', cat:'tasks' },
+      { id:'ach_on_time10', name:'Дисциплина', desc:'10 задач до дедлайна', icon:'📋', cat:'tasks' },
+      { id:'ach_queue_user', name:'Очередец', desc:'Выполнить 3 задачи через очередь таймера', icon:'🚶', cat:'sessions' },
     ];
 
     $('profile-ach-count').textContent = `Достижения: ${achData.length} / ${ALL_ACH.length}`;
 
     const categories = {};
     ALL_ACH.forEach(a => { if (!categories[a.cat]) categories[a.cat] = []; categories[a.cat].push(a); });
-    const catLabels = { tasks:'Задачи', streak:'Стрик', level:'Уровень', time:'Время', tags:'Теги', links:'Связи', notes:'Заметки', schedule:'Расписание', graph:'Граф', sessions:'Таймер', daily:'День', hidden:'Скрытые', ai:'AI', recurring:'Циклы' };
+    const catLabels = { tasks:'Задачи', streak:'Стрик', level:'Уровень', time:'Время', tags:'Теги', links:'Связи', notes:'Заметки', schedule:'Расписание', graph:'Граф', sessions:'Таймер', daily:'День', hidden:'Скрытые', ai:'AI', recurring:'Циклы', comments:'Комментарии' };
     let activeCat = window._profileCat || 'all';
 
     const tabsHtml = ['<button class="filter-chip active" data-cat="all" style="font-size:10px">Все (' + ALL_ACH.length + ')</button>'];

@@ -26,10 +26,10 @@ function rerender() {
 
 /* ═══ THEME ═══ */
 function applyTheme() {
-  const isDark = settings.theme !== 'light';
-  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-  const toggle = $('theme-toggle');
-  if (toggle) toggle.checked = isDark;
+  const theme = settings.theme || 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  const sel = $('theme-select');
+  if (sel) sel.value = theme;
 }
 
 /* ═══ LOAD ALL ═══ */

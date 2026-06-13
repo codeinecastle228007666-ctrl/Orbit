@@ -64,6 +64,7 @@ app.put('/api/tasks/:id', (req, res) => {
     const oldStatus = existing.status;
     const recurring = req.body.recurring !== undefined ? req.body.recurring : existing.recurring;
     const favorite = req.body.favorite !== undefined ? (req.body.favorite ? 1 : 0) : existing.favorite;
+    const favoriteChanged = req.body.favorite !== undefined && req.body.favorite != existing.favorite;
     dbRun(db, `UPDATE tasks SET title=?, desc=?, priority=?, status=?, dueDate=?, estimate=?, actualTime=?, tags=?, parentId=?, recurring=?, favorite=?, updatedAt=? WHERE id=?`,
       [(title || existing.title).trim(),
       (desc !== undefined ? desc : existing.desc || '').trim(),
@@ -74,6 +75,10 @@ app.put('/api/tasks/:id', (req, res) => {
       JSON.stringify(tags !== undefined ? tags : JSON.parse(existing.tags || '[]')),
       parentId !== undefined ? parentId : existing.parentId,
       recurring, favorite, Date.now(), req.params.id]);
+    if (favoriteChanged && req.body.favorite) {
+      const favAch = checkAchievements(db, 'favorite');
+      newAchievements = newAchievements.concat(favAch);
+    }
     if (status && status !== oldStatus) {
       logActivity(db, req.params.id, 'status:' + oldStatus + '->' + status);
       if (status === 'done') processRecurring(req.params.id);
@@ -357,13 +362,18 @@ app.post('/api/daily-notes', (req, res) => {
     const { date, content } = req.body;
     if (!date) return res.status(400).json({ error: 'Date required' });
     const existing = dbGet(db, 'SELECT * FROM daily_notes WHERE date = ?', [date]);
+    let isNew = false;
     if (existing) {
       dbRun(db, 'UPDATE daily_notes SET content = ?, updatedAt = ? WHERE date = ?', [content !== undefined ? content : existing.content, Date.now(), date]);
     } else {
+      isNew = true;
       const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       dbRun(db, 'INSERT INTO daily_notes (id, date, content, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)', [id, date, content || '', Date.now(), Date.now()]);
     }
-    res.json(dbGet(db, 'SELECT * FROM daily_notes WHERE date = ?', [date]));
+    const dnData = dbGet(db, 'SELECT * FROM daily_notes WHERE date = ?', [date]);
+    const newAch = isNew ? checkAchievements(db, 'daily_note') : [];
+    if (newAch.length) broadcast('achievements', newAch);
+    res.json({ ...dnData, new_achievements: newAch });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -394,7 +404,10 @@ app.post('/api/comments', (req, res) => {
     const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     dbRun(db, 'INSERT INTO task_comments (id, taskId, text, timestamp) VALUES (?, ?, ?, ?)', [id, taskId, text.trim(), Date.now()]);
     logActivity(db, taskId, 'commented');
-    res.json(dbGet(db, 'SELECT * FROM task_comments WHERE id = ?', [id]));
+    const commentData = dbGet(db, 'SELECT * FROM task_comments WHERE id = ?', [id]);
+    const newAch = checkAchievements(db, 'comment');
+    if (newAch.length) broadcast('achievements', newAch);
+    res.json({ ...commentData, new_achievements: newAch });
     broadcast('comment_added', { taskId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -727,7 +740,9 @@ app.post('/api/ai/organize', async (req, res) => {
         if (score > 0.35) suggestions.links.push({ sourceId: a.id, targetId: b.id, score, reason: 'Похожие названия' });
       }
     }
-    res.json(suggestions);
+    const newAch = checkAchievements(db, 'ai_organize');
+    if (newAch.length) broadcast('achievements', newAch);
+    res.json({ ...suggestions, new_achievements: newAch });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -992,6 +1007,37 @@ function checkAchievements(db, trigger) {
   if (notes.length >= 1) give('first_note', 'Первая заметка', 'Создать первую заметку', '📄', 'notes');
   if (notes.length >= 10) give('thinker', 'Мыслитель', '10+ заметок', '🧠', 'notes');
   if (notes.length >= 50) give('writer', 'Писатель', '50+ заметок', '✍️', 'notes');
+
+  // ── Comments ──
+  const allComments = dbAll(db, 'SELECT * FROM task_comments');
+  if (trigger === 'comment' && allComments.length >= 1) give('first_comment', 'Комментатор', 'Добавить первый комментарий', '💬', 'comments');
+  if (trigger === 'comment' && allComments.length >= 10) give('chatterbox', 'Болтун', '10+ комментариев', '🗣️', 'comments');
+
+  // ── Daily Notes ──
+  const dailyNotes = dbAll(db, 'SELECT * FROM daily_notes');
+  if (trigger === 'daily_note') give('daily_note', 'Ежедневка', 'Создать первую ежедневную заметку', '📓', 'notes');
+
+  // ── Favorites ──
+  const favTasks = allTasks.filter(t => t.favorite);
+  if (trigger === 'favorite' && favTasks.length >= 1) give('favorited', 'Избранное', 'Добавить задачу в избранное', '⭐', 'tasks');
+  if (trigger === 'favorite' && favTasks.length >= 5) give('favorited5', 'Коллекция', '5 задач в избранном', '🌟', 'tasks');
+
+  // ── AI Organize ──
+  if (trigger === 'ai_organize') give('ai_organize', 'AI-организатор', 'Использовать AI-организацию графа', '🔮', 'ai');
+
+  // ── On Time ──
+  if (trigger === 'task_done') {
+    const todayS = new Date().toISOString().slice(0, 10);
+    const timelyTasks = allTasks.filter(t => t.status === 'done' && t.dueDate && t.dueDate >= todayS).length;
+    if (timelyTasks >= 1) give('on_time', 'В срок', 'Выполнить задачу до дедлайна', '⏰', 'tasks');
+    if (timelyTasks >= 10) give('on_time10', 'Дисциплина', '10 задач до дедлайна', '📋', 'tasks');
+  }
+
+  // ── Timer Queue ──
+  if (trigger === 'queue') {
+    const queueEntries = allTasks.filter(t => t.status === 'done' && t.actualTime > 0).length;
+    if (queueEntries >= 3) give('queue_user', 'Очередец', 'Выполнить 3 задачи через очередь таймера', '🚶', 'sessions');
+  }
 
   // ── Schedule ──
   if (trigger === 'schedule') give('planner', 'Планировщик', 'Добавить задачу в расписание', '📅', 'schedule');
