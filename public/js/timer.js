@@ -68,7 +68,10 @@ function stopTimer() {
       api('PUT', '/tasks/' + task.id, { actualTime: task.actualTime }).catch(() => {});
     }
     if (timerEntryId) {
-      api('PUT', '/time-entries/' + timerEntryId, { endTime: Date.now(), duration: timerElapsed }).catch(() => {});
+      api('PUT', '/time-entries/' + timerEntryId, { endTime: Date.now(), duration: timerElapsed }).then(updated => {
+        const idx = timeEntries.findIndex(e => e.id === timerEntryId);
+        if (idx >= 0) timeEntries[idx] = updated; else timeEntries.unshift(updated);
+      }).catch(() => {});
     }
     timerSessions.unshift({ taskId: timerTaskId, duration: timerElapsed, date: new Date().toISOString() });
     if (timerSessions.length > 50) timerSessions = timerSessions.slice(0, 50);
@@ -131,11 +134,12 @@ function renderTimerView() {
 
   // Stats summary
   const totalSec = tasks.reduce((s, t) => s + (t.actualTime || 0), 0);
-  const todaySessions = timerSessions.filter(s => {
-    const d = new Date(s.date);
-    return d.toDateString() === new Date().toDateString();
+  const today = new Date().toDateString();
+  const todayEntries = timeEntries.filter(e => {
+    const d = new Date(e.startTime);
+    return d.toDateString() === today;
   });
-  const todaySec = todaySessions.reduce((s, sess) => s + sess.duration, 0);
+  const todaySec = todayEntries.reduce((s, e) => s + (e.duration || 0), 0);
   const totalDone = tasks.filter(t => t.status === 'done').length;
   const statHtml = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
     <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--border-soft)">
@@ -147,8 +151,8 @@ function renderTimerView() {
       <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Сегодня</div>
     </div>
     <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--border-soft)">
-      <div style="font-size:18px;font-weight:600;color:var(--accent)">${timerSessions.length}</div>
-      <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Сессий</div>
+      <div style="font-size:18px;font-weight:600;color:var(--accent)">${timeEntries.length}</div>
+      <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">Записей</div>
     </div>
     <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--border-soft)">
       <div style="font-size:18px;font-weight:600;color:var(--accent)">${totalDone}</div>
@@ -163,12 +167,13 @@ function renderTimerView() {
     if (el) el.innerHTML = statHtml;
   }
 
-  $('timer-history-list').innerHTML = timerSessions.slice(0, 10).map(s => {
-    const t = tasks.find(x => x.id === s.taskId);
-    const date = new Date(s.date);
+  const sorted = [...timeEntries].sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
+  $('timer-history-list').innerHTML = sorted.slice(0, 10).map(e => {
+    const t = tasks.find(x => x.id === e.taskId);
+    const date = new Date(e.startTime);
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;margin-bottom:4px;background:var(--bg-secondary);border:1px solid var(--border-soft);font-size:12px">
       <span style="flex:1;color:var(--text-primary)">${t ? esc(t.title) : 'Удалена'}</span>
-      <span style="font-family:JetBrains Mono,monospace;color:var(--accent);font-weight:600">${formatTimerTime(s.duration)}</span>
+      <span style="font-family:JetBrains Mono,monospace;color:var(--accent);font-weight:600">${formatTimerTime(e.duration || 0)}</span>
       <span style="color:var(--text-tertiary)">${date.toLocaleDateString('ru-RU')} ${date.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}</span>
     </div>`;
   }).join('') || '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Нет записей</div>';

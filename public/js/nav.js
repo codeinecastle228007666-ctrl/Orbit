@@ -45,12 +45,12 @@ async function loadAll() {
   loadingEl.style.display = 'flex';
   for (let retry = 0; retry < 3; retry++) {
     try {
-      const [t, s, n, st, l, a, x, ach] = await Promise.all([
+      const [t, s, n, st, l, a, x, ach, te] = await Promise.all([
         api('GET', '/tasks'), api('GET', '/schedule'), api('GET', '/notes'),
         api('GET', '/settings'), api('GET', '/links'), api('GET', '/activity?days=14'),
-        api('GET', '/xp'), api('GET', '/achievements')
+        api('GET', '/xp'), api('GET', '/achievements'), api('GET', '/time-entries')
       ]);
-      tasks = t; schedule = s; notes = n; settings = st; links = l; activity = a; xpData = x; achievements = ach;
+      tasks = t; schedule = s; notes = n; settings = st; links = l; activity = a; xpData = x; achievements = ach; timeEntries = te;
       applyTheme(); applySettingsUI();
       const lastView = loadUIPref('lastView', null);
       if (lastView) switchView(lastView); else rerender();

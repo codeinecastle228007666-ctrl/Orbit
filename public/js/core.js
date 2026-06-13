@@ -78,6 +78,7 @@ let timerStartTs = null;
 let timerInterval = null;
 let timerEntryId = null;
 let timerSessions = loadUIPref('timerSessions', []);
+let timeEntries = [];
 
 /* ═══ TIMER PERSISTENCE ═══ */
 function saveTimerState() {
