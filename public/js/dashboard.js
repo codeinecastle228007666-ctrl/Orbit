@@ -47,6 +47,40 @@ function renderDashboard() {
 
   renderHeatmap(activity);
   renderAchievements();
+  renderReport();
+}
+
+async function renderReport() {
+  const el = $('report-container');
+  if (!el) return;
+  try {
+    const r = await api('GET', '/analytics/report?period=week');
+    el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+      <div style="text-align:center;padding:10px;background:var(--bg-tertiary);border-radius:8px">
+        <div style="font-size:16px;font-weight:600;color:var(--accent)">${r.tasksCreated}</div>
+        <div style="font-size:9px;color:var(--text-tertiary)">Создано</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:var(--bg-tertiary);border-radius:8px">
+        <div style="font-size:16px;font-weight:600;color:var(--success)">${r.tasksCompleted}</div>
+        <div style="font-size:9px;color:var(--text-tertiary)">Выполнено</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:var(--bg-tertiary);border-radius:8px">
+        <div style="font-size:16px;font-weight:600;color:var(--warning);font-family:JetBrains Mono,monospace">${formatTimerTime(r.totalTimeSec)}</div>
+        <div style="font-size:9px;color:var(--text-tertiary)">Время</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:var(--bg-tertiary);border-radius:8px">
+        <div style="font-size:16px;font-weight:600;color:var(--accent)">+${r.xpEarned}</div>
+        <div style="font-size:9px;color:var(--text-tertiary)">XP</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between">
+      <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:9px;color:var(--text-tertiary);font-weight:600">Дни:</span>
+        ${r.dailyBreakdown.map(d => `<span style="font-size:9px;padding:3px 6px;border-radius:4px;background:var(--bg-tertiary);color:var(--text-secondary)">${d.day} ${d.tasks_done}✔ +${d.xp}</span>`).join('')}
+      </div>
+      ${r.topTags.length ? `<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"><span style="font-size:9px;color:var(--text-tertiary);font-weight:600">Теги:</span>${r.topTags.map(t => `<span style="font-size:9px;padding:3px 6px;border-radius:4px;background:var(--bg-tertiary);color:var(--accent)">#${esc(t.name)} ${t.count}</span>`).join('')}</div>` : ''}
+    </div>`;
+  } catch (_) { el.innerHTML = ''; }
 }
 
 function renderAchievements() {

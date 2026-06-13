@@ -219,7 +219,7 @@ app.post('/api/notes', (req, res) => {
     else dbRun(db, 'INSERT INTO daily_stats (date, tasks_completed, xp_earned, time_tracked, notes_created, tasks_created) VALUES (?, 0, 5, 0, 1, 0)', [today]);
     const note = dbGet(db, 'SELECT * FROM notes WHERE id = ?', [id]);
     syncWikiLinks(db, 'note', id, (title || '') + ' ' + (content || ''));
-    const newAch = checkAchievements(db);
+    const newAch = checkAchievements(db, 'note');
     res.json({ ...note, xp: xpResult, new_achievements: newAch });
     broadcast('note_created', { id: note.id, title: note.title });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -290,7 +290,7 @@ app.post('/api/time-entries', (req, res) => {
       xpResult = awardXp(db, xpMinutes);
       dbRun(db, 'UPDATE user_xp SET total_time_tracked = total_time_tracked + ? WHERE id = 1', [xpMinutes]);
     }
-    const newAch = checkAchievements(db);
+    const newAch = checkAchievements(db, 'time');
     res.json({ ...dbGet(db, 'SELECT * FROM time_entries WHERE id = ?', [id]), xp: xpResult, new_achievements: newAch });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -682,7 +682,7 @@ app.post('/api/ai/schedule', async (req, res) => {
           body: JSON.stringify({ model: 'google/gemini-2.0-flash-exp:free', messages: [{ role: 'user', content: prompt }], temperature: 0.3, max_tokens: 2000 }),
         });
         const body = await resp.text();
-        if (resp.ok) { const data = JSON.parse(body); const text = data.choices[0].message.content; const match = text.match(/\[[\s\S]*\]/); if (match) return res.json({ schedule: JSON.parse(match[0]), source: 'openrouter' }); }
+        if (resp.ok) { const data = JSON.parse(body); const text = data.choices[0].message.content; const match = text.match(/\[[\s\S]*\]/); if (match) { const newAch = checkAchievements(db, 'ai_schedule'); if (newAch.length) broadcast('achievements', newAch); return res.json({ schedule: JSON.parse(match[0]), source: 'openrouter', new_achievements: newAch }); } }
       } catch (e) { console.error('AI schedule fallback:', e.message); }
     }
     if (!taskIds || taskIds.length === 0) return res.json({ schedule: [], source: 'local' });
@@ -742,7 +742,7 @@ app.post('/api/ai/chat', async (req, res) => {
       body: JSON.stringify({ model: 'google/gemini-2.0-flash-exp:free', messages: [{ role: 'user', content: context }], temperature: 0.5, max_tokens: 1500 }),
     });
     const body = await resp.text();
-    if (resp.ok) { const data = JSON.parse(body); res.json({ reply: data.choices[0].message.content, source: 'openrouter' }); }
+    if (resp.ok) { const data = JSON.parse(body); const newAch = checkAchievements(db, 'ai_chat'); if (newAch.length) broadcast('achievements', newAch); res.json({ reply: data.choices[0].message.content, source: 'openrouter', new_achievements: newAch }); }
     else res.json({ reply: 'Ошибка AI: ' + body.slice(0, 200), source: 'error' });
   } catch (e) { res.json({ reply: 'Ошибка соединения с AI.', source: 'error' }); }
 });
@@ -774,6 +774,36 @@ app.post('/api/ai/chronoplan', async (req, res) => {
       current += dur + 5;
     }
     res.json({ schedule, goldenHours, aiInsight: goldenHours.length > 0 ? 'Золотые часы: ' + goldenHours.map(h => h + ':00').join(', ') + '. Ставьте важные задачи на это время!' : 'Недостаточно данных для анализа.' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── REPORT ─────────────────────────────────────────────────
+app.get('/api/analytics/report', (req, res) => {
+  try {
+    const period = req.query.period || 'week';
+    const days = period === 'month' ? 30 : 7;
+    const since = new Date(); since.setDate(since.getDate() - days);
+    const sinceStr = since.toISOString().slice(0, 10);
+    const dailyStats = dbAll(db, 'SELECT * FROM daily_stats WHERE date >= ? ORDER BY date', [sinceStr]);
+    const hoursSince = since.getTime();
+    const timeEntries = dbAll(db, 'SELECT * FROM time_entries WHERE startTime >= ?', [hoursSince]);
+    const tasksInPeriod = dbAll(db, 'SELECT * FROM tasks WHERE createdAt >= ?', [hoursSince]);
+    const tasksDoneInPeriod = tasksInPeriod.filter(t => t.status === 'done');
+    const totalTimeSec = timeEntries.reduce((s, e) => s + (e.duration || 0), 0);
+    const xpEarned = dailyStats.reduce((s, d) => s + (d.xp_earned || 0), 0);
+    const tasksCreated = dailyStats.reduce((s, d) => s + (d.tasks_created || 0), 0);
+    const tasksCompleted = dailyStats.reduce((s, d) => s + (d.tasks_completed || 0), 0);
+    const notesCreated = dailyStats.reduce((s, d) => s + (d.notes_created || 0), 0);
+    const dayLabels = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+    const dailyBreakdown = dailyStats.map(d => {
+      const day = new Date(d.date + 'T00:00:00');
+      return { date: d.date, day: dayLabels[day.getDay()], xp: d.xp_earned || 0, tasks_done: d.tasks_completed || 0 };
+    });
+    const allTags = new Map();
+    const recentTasks = dbAll(db, 'SELECT tags FROM tasks WHERE updatedAt >= ? OR createdAt >= ?', [hoursSince, hoursSince]);
+    recentTasks.forEach(t => { JSON.parse(t.tags || '[]').forEach(tg => allTags.set(tg, (allTags.get(tg) || 0) + 1)); });
+    const topTags = [...allTags.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
+    res.json({ period: period === 'month' ? 'месяц' : 'неделя', days, totalTimeSec, xpEarned, tasksCreated, tasksCompleted, notesCreated, dailyBreakdown, topTags });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -966,6 +996,15 @@ function checkAchievements(db, trigger) {
   // ── Graph ──
   if (trigger === 'graph_pan') give('explorer', 'Исследователь графа', 'Осмотреть граф', '🗺️', 'graph');
 
+  // ── AI ──
+  if (trigger === 'ai_schedule') give('ai_scheduler', 'AI-планировщик', 'Использовать AI-расписание', '🤖', 'ai');
+  if (trigger === 'ai_chat') give('ai_chat', 'Диалог с AI', 'Написать AI-ассистенту', '💬', 'ai');
+
+  // ── Recurring ──
+  const recurringTasks = allTasks.filter(t => t.recurring);
+  if (recurringTasks.length >= 1) give('recurring1', 'Цикличность', 'Создать повторяющуюся задачу', '🔁', 'recurring');
+  if (recurringTasks.length >= 5) give('recurring5', 'Ритм', '5+ повторяющихся задач', '🔄', 'recurring');
+
   // ── Sessions ──
   const sessions = dbAll(db, 'SELECT * FROM time_entries');
   if (sessions.length >= 5) give('sessions5', 'Фокус', '5 сессий таймера', '🎯', 'sessions');
@@ -981,7 +1020,8 @@ function checkAchievements(db, trigger) {
 
   // ── Hidden ──
   if (trigger === 'hidden_panic') give('panic', 'Паническая кнопка', 'Нажать кнопку помощи', '🆘', 'hidden');
-  if (trigger === 'hidden_midnight') give('midnight', 'Полуночник', 'Работать после полуночи', '🌙', 'hidden');
+  const currentHour = new Date().getHours();
+  if (currentHour >= 0 && currentHour < 5) give('midnight', 'Полуночник', 'Работать после полуночи', '🌙', 'hidden');
 
   return newAchievements;
 }

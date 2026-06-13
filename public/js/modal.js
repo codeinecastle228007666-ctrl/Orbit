@@ -17,6 +17,8 @@ function openTaskModal(task) {
   if (timerGroup) timerGroup.style.display = task ? 'block' : 'none';
   updateModalTimer(task);
   setupManualTimeButtons(task);
+  if (window._modalTimerInterval) clearInterval(window._modalTimerInterval);
+  window._modalTimerInterval = setInterval(() => { if (task) updateModalTimer(task); }, 1000);
 
   // Populate parent dropdown
   const parentSel = $('task-parent');
@@ -122,6 +124,7 @@ function closeTaskModal(force) {
       return;
     }
   }
+  if (window._modalTimerInterval) { clearInterval(window._modalTimerInterval); window._modalTimerInterval = null; }
   $('task-modal').classList.remove('open');
   editingTaskId = null;
   window._modalInitialValues = null;
