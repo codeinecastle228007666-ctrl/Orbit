@@ -174,7 +174,25 @@ async function api(method, path, body) {
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res = await fetch('/api' + path, opts);
   if (!res.ok) { const e = await res.text(); throw new Error(e); }
-  return res.json();
+  const data = await res.json();
+  if (data && data.new_achievements && data.new_achievements.length > 0) {
+    data.new_achievements.forEach(ach => showAchievementNotification(ach));
+    achievements = [...achievements, ...data.new_achievements];
+  }
+  return data;
+}
+
+function showAchievementNotification(ach) {
+  const c = $('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast toast-achievement';
+  t.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+    <span style="font-size:28px">${ach.icon || '🏆'}</span>
+    <div><div style="font-weight:600;font-size:13px;color:var(--text-primary)">${esc(ach.name)}</div>
+    <div style="font-size:11px;color:var(--text-secondary)">${esc(ach.description)}</div></div>
+  </div>`;
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 260); }, 5000);
 }
 
 /* ═══ TOASTS ═══ */
