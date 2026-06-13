@@ -102,7 +102,7 @@ function renderAchievements() {
     <div style="font-size:32px;width:56px;height:56px;display:flex;align-items:center;justify-content:center;background:var(--accent-soft);border-radius:14px;flex-shrink:0">${icon}</div>
     <div style="flex:1;min-width:140px">
       <div style="font-size:16px;font-weight:600;color:var(--text-primary)">Ур. ${level} · ${esc(levelName)}</div>
-      <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">${totalXp} XP · 🔥 ${streak} дн · 🏆 ${ach.length} ачивок · ⏱ ${formatTimerTime(timeTracked * 60)}</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">${totalXp} XP · 🔥 ${streak} дн · 🏆 ${ach.length} ачивок · ⏱ ${formatTimerTime(timeTracked * 600)}</div>
       <div style="margin-top:8px;height:6px;background:var(--bg-tertiary);border-radius:3px;overflow:hidden">
         <div style="height:100%;width:${progress}%;background:linear-gradient(90deg,var(--accent),var(--warning));border-radius:3px;transition:width .6s var(--ease)"></div>
       </div>
