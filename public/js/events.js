@@ -75,8 +75,8 @@ function initEvents() {
   });
 
   // Daily notes
-  $('dn-prev').addEventListener('click', () => { dailyNotesDate = new Date(new Date(dailyNotesDate + 'T00:00:00').getTime() - 86400000).toISOString().slice(0, 10); renderDailyNotes(); });
-  $('dn-next').addEventListener('click', () => { dailyNotesDate = new Date(new Date(dailyNotesDate + 'T00:00:00').getTime() + 86400000).toISOString().slice(0, 10); renderDailyNotes(); });
+  $('dn-prev').addEventListener('click', () => shiftDNDate(-1));
+  $('dn-next').addEventListener('click', () => shiftDNDate(1));
   $('dn-today').addEventListener('click', () => { dailyNotesDate = todayStr(); renderDailyNotes(); });
   $('daily-notes-content').addEventListener('input', scheduleDailyNotesSave);
 
@@ -312,7 +312,7 @@ function initEvents() {
 }
 
 function showHelp() {
-  api('POST', '/api/activity/trigger', { trigger: 'hidden_panic' }).catch(() => {});
+  api('POST', '/activity/trigger', { trigger: 'hidden_panic' }).catch(() => {});
   const overlay = document.createElement('div');
   overlay.className = 'confirm-overlay';
   overlay.style.cssText = 'z-index:300';

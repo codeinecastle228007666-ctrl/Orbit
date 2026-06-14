@@ -2,7 +2,7 @@ const initSqlJs = require('sql.js');
 const path = require('path');
 const fs = require('fs');
 
-const DB_PATH = path.join(__dirname, 'data', 'orbit.db');
+const DB_PATH = process.env.TEST_DB_PATH || path.join(__dirname, 'data', 'orbit.db');
 
 async function initDb() {
   const dir = path.dirname(DB_PATH);

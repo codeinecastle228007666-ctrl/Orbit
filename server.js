@@ -50,7 +50,7 @@ app.post('/api/tasks', (req, res) => {
     if (ds) dbRun(db, 'UPDATE daily_stats SET tasks_created = tasks_created + 1 WHERE date = ?', [today]);
     else dbRun(db, 'INSERT INTO daily_stats (date, tasks_completed, xp_earned, time_tracked, notes_created, tasks_created) VALUES (?, 0, 5, 0, 0, 1)', [today]);
     const xpResult = awardXp(db, 5);
-    const newAch = checkAchievements(db);
+    const newAch = favorite ? checkAchievements(db, 'favorite') : checkAchievements(db);
     res.json({ ...task, tags: JSON.parse(task.tags || '[]'), xp: xpResult, new_achievements: newAch });
     broadcast('task_created', { id: task.id, title: task.title });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -75,16 +75,16 @@ app.put('/api/tasks/:id', (req, res) => {
       JSON.stringify(tags !== undefined ? tags : JSON.parse(existing.tags || '[]')),
       parentId !== undefined ? parentId : existing.parentId,
       recurring, favorite, Date.now(), req.params.id]);
+    let newAchievements = [];
     if (favoriteChanged && req.body.favorite) {
       const favAch = checkAchievements(db, 'favorite');
-      newAchievements = newAchievements.concat(favAch);
+      if (favAch.length) newAchievements = newAchievements.concat(favAch);
     }
     if (status && status !== oldStatus) {
       logActivity(db, req.params.id, 'status:' + oldStatus + '->' + status);
       if (status === 'done') processRecurring(req.params.id);
     } else logActivity(db, req.params.id, 'updated');
     let task = dbGet(db, 'SELECT * FROM tasks WHERE id = ?', [req.params.id]);
-    let newAchievements = [];
     let xpResult = null;
     if (status && status !== oldStatus) {
       processAutomationRules(db, 'status_change', task, { oldStatus });
@@ -98,7 +98,8 @@ app.put('/api/tasks/:id', (req, res) => {
         const ds = dbGet(db, 'SELECT * FROM daily_stats WHERE date = ?', [today]);
         if (ds) dbRun(db, 'UPDATE daily_stats SET tasks_completed = tasks_completed + 1 WHERE date = ?', [today]);
         else dbRun(db, 'INSERT INTO daily_stats (date, tasks_completed, xp_earned, time_tracked, notes_created, tasks_created) VALUES (?, 1, ?, 0, 0, 0)', [today, xpBase + xpBonus]);
-        newAchievements = checkAchievements(db, 'task_done');
+        const doneAch = checkAchievements(db, 'task_done');
+        if (doneAch.length) newAchievements = newAchievements.concat(doneAch);
       }
       task = dbGet(db, 'SELECT * FROM tasks WHERE id = ?', [req.params.id]);
     }
@@ -318,7 +319,7 @@ app.put('/api/time-entries/:id', (req, res) => {
       xpResult = awardXp(db, xpMinutes);
       dbRun(db, 'UPDATE user_xp SET total_time_tracked = total_time_tracked + ? WHERE id = 1', [xpMinutes]);
     }
-    const newAch = checkAchievements(db);
+    const newAch = checkAchievements(db, 'time');
     res.json({ ...dbGet(db, 'SELECT * FROM time_entries WHERE id = ?', [req.params.id]), xp: xpResult, new_achievements: newAch });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -456,7 +457,7 @@ app.post('/api/attachments', (req, res) => {
   try {
     const { taskId, name, type, data, size } = req.body;
     if (!taskId || !name || !data) return res.status(400).json({ error: 'taskId, name, and data required' });
-    if (data.length > 7000000) return res.status(400).json({ error: 'File too large (max 5MB)' });
+    if (data.length > 5000000) return res.status(400).json({ error: 'File too large (max 5MB)' });
     const id = 'att' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     dbRun(db, 'INSERT INTO task_attachments (id, taskId, name, type, data, size, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [id, taskId, name, type || '', data, size || 0, Date.now()]);
@@ -886,18 +887,19 @@ function getXpForNext(level) {
 }
 
 function awardXp(db, amount) {
-  let xp = dbGet(db, 'SELECT * FROM user_xp WHERE id = 1');
-  if (!xp) { dbRun(db, 'INSERT INTO user_xp (id, total_xp, level, current_streak, best_streak, last_active_date, total_tasks_done, total_time_tracked, ptm_days_active, updatedAt) VALUES (1, 0, 0, 0, 0, \'\', 0, 0, 0, ?)', [Date.now()]); xp = { total_xp: 0, level: 0, current_streak: 0, best_streak: 0, last_active_date: '', total_tasks_done: 0, total_time_tracked: 0, ptm_days_active: 0 }; }
+  let xp = dbGet(db, 'SELECT * FROM user_xp LIMIT 1');
+  if (!xp) { dbRun(db, "INSERT INTO user_xp (id, total_xp, level, current_streak, best_streak, last_active_date, total_tasks_done, total_time_tracked, ptm_days_active, updatedAt) VALUES (1, 0, 0, 0, 0, '', 0, 0, 0, ?)", [Date.now()]); xp = { total_xp: 0, level: 0, current_streak: 0, best_streak: 0, last_active_date: '', total_tasks_done: 0, total_time_tracked: 0, ptm_days_active: 0 }; }
   const newTotal = (xp.total_xp || 0) + amount;
   const lv = getLevel(newTotal);
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   let streak = xp.current_streak || 0;
-  if (xp.last_active_date === today) { /* no change */ }
+  if (xp.last_active_date && xp.last_active_date === today) { /* no change */ }
   else if (xp.last_active_date === yesterday) streak++;
   else streak = 1;
   const bestStreak = Math.max(streak, xp.best_streak || 0);
-  const ptmDays = (xp.ptm_days_active || 0) + (xp.last_active_date === today ? 0 : 1);
+  const lastActiveIsToday = xp.last_active_date && xp.last_active_date === today;
+  const ptmDays = (xp.ptm_days_active || 0) + (lastActiveIsToday ? 0 : 1);
   dbRun(db, 'UPDATE user_xp SET total_xp=?, level=?, current_streak=?, best_streak=?, last_active_date=?, ptm_days_active=?, updatedAt=? WHERE id=1',
     [newTotal, lv.level, streak, bestStreak, today, ptmDays, Date.now()]);
   const ds = dbGet(db, 'SELECT * FROM daily_stats WHERE date = ?', [today]);
@@ -931,8 +933,8 @@ app.get('/api/achievements', (req, res) => {
 });
 
 function checkAchievements(db, trigger) {
-  const xp = dbGet(db, 'SELECT * FROM user_xp WHERE id = 1');
-  if (!xp) return [];
+  let xp = dbGet(db, 'SELECT * FROM user_xp LIMIT 1');
+  if (!xp) { dbRun(db, "INSERT INTO user_xp (id, total_xp, level, current_streak, best_streak, last_active_date, total_tasks_done, total_time_tracked, ptm_days_active, updatedAt) VALUES (1, 0, 0, 0, 0, '', 0, 0, 0, ?)", [Date.now()]); xp = { total_xp: 0, level: 0, current_streak: 0, best_streak: 0, last_active_date: '', total_tasks_done: 0, total_time_tracked: 0, ptm_days_active: 0 }; }
   const earned = dbAll(db, 'SELECT id FROM achievements');
   const earnedIds = new Set(earned.map(e => e.id));
   const newAchievements = [];
@@ -1028,13 +1030,13 @@ function checkAchievements(db, trigger) {
   // ── On Time ──
   if (trigger === 'task_done') {
     const todayS = new Date().toISOString().slice(0, 10);
-    const timelyTasks = allTasks.filter(t => t.status === 'done' && t.dueDate && t.dueDate >= todayS).length;
+    const timelyTasks = allTasks.filter(t => t.status === 'done' && t.dueDate && t.updatedAt && t.dueDate >= new Date(t.updatedAt).toISOString().slice(0, 10)).length;
     if (timelyTasks >= 1) give('on_time', 'В срок', 'Выполнить задачу до дедлайна', '⏰', 'tasks');
     if (timelyTasks >= 10) give('on_time10', 'Дисциплина', '10 задач до дедлайна', '📋', 'tasks');
   }
 
   // ── Timer Queue ──
-  if (trigger === 'queue') {
+  if (trigger === 'queue' || trigger === 'task_done') {
     const queueEntries = allTasks.filter(t => t.status === 'done' && t.actualTime > 0).length;
     if (queueEntries >= 3) give('queue_user', 'Очередец', 'Выполнить 3 задачи через очередь таймера', '🚶', 'sessions');
   }
@@ -1141,4 +1143,8 @@ async function start() {
   wss.on('connection', ws => { ws.send(JSON.stringify({ type: 'connected', ts: Date.now() })); });
 }
 
-start().catch(err => { console.error('Failed to start:', err); process.exit(1); });
+if (!process.env.TEST_DB_PATH) {
+  start().catch(err => { console.error('Failed to start:', err); process.exit(1); });
+}
+
+module.exports = { app, start, initDb, db, wss, saveDb }; // for testing

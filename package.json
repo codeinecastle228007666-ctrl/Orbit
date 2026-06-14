@@ -4,11 +4,16 @@
   "description": "CRM V2 — полная переработка: канбан, расписание, заметки, граф, ачивки, музыка, таймер",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "vitest run --reporter verbose",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "express": "^4.21.0",
+    "playwright": "^1.60.0",
     "sql.js": "^1.11.0",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.8",
     "ws": "^8.18.0"
   }
 }

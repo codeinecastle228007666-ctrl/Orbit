@@ -67,6 +67,7 @@ let kanbanFilter = 'all';
 let noteSaveTimer = null;
 let dailyNotesDate = todayStr();
 let dailyNotesSaveTimer = null;
+let allDailyNotes = [];
 let calendarMonth = new Date();
 let kanbanCollapsed = loadUIPref('kanbanCollapsed', {});
 
@@ -174,7 +175,7 @@ async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res = await fetch('/api' + path, opts);
-  if (!res.ok) { const e = await res.text(); throw new Error(e); }
+  if (!res.ok) { const e = await res.text(); try { const j = JSON.parse(e); throw new Error(j.error || j.message || e); } catch (_) { throw new Error(e); } }
   const data = await res.json();
   if (data && data.new_achievements && data.new_achievements.length > 0) {
     data.new_achievements.forEach(ach => showAchievementNotification(ach));

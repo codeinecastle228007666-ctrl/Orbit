@@ -308,12 +308,19 @@ body{
 .kanban-card .card-timer button{background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:14px;padding:2px 4px;border-radius:4px;transition:all .15s}
 .kanban-card .card-timer button:hover{color:var(--accent);background:var(--accent-soft)}
 mark{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 3px;font-weight:600}
-.kanban-card.kanban-child{background:var(--bg-tertiary);opacity:0.75;margin-left:18px;margin-bottom:4px;padding:8px 10px;border-left:2px solid var(--border-strong);border-radius:8px;display:flex;align-items:center;gap:8px;box-shadow:none;animation:childIn .3s var(--ease-out);cursor:grab}
-.kanban-card.kanban-child:hover{opacity:1;background:var(--bg-secondary);border-left-color:var(--accent)}
-.kanban-card.kanban-child .card-title{-webkit-line-clamp:2}
-.kanban-card.kanban-child .card-meta{margin-top:0}
-.kanban-card.kanban-child .card-child-line{width:3px;align-self:stretch;background:var(--border-strong);border-radius:2px;flex-shrink:0}
-@keyframes childIn{from{opacity:0;transform:translateX(-6px)}to{opacity:0.75;transform:translateX(0)}}
+.kanban-group{margin-bottom:6px}
+.kanban-group .kanban-card{border-radius:8px}
+.kanban-group .kanban-card:first-child{border-bottom-left-radius:0;border-bottom-right-radius:0;margin-bottom:0;position:relative;z-index:1}
+.kanban-group .kanban-card:first-child::after{content:'';position:absolute;bottom:-6px;left:0;right:0;height:6px;background:var(--bg-primary)}
+.kanban-group .kanban-card:first-child:hover{z-index:2}
+.kanban-card.kanban-child{background:var(--bg-tertiary);margin-left:24px;margin-bottom:0;padding:8px 10px;border-left:2px solid var(--border);border-radius:0 0 8px 8px;border-top:1px solid var(--border-soft);display:flex;align-items:flex-start;gap:8px;box-shadow:none;cursor:grab;position:relative}
+.kanban-card.kanban-child:hover{background:var(--bg-elevated);border-left-color:var(--accent)}
+.kanban-card.kanban-child .card-title{-webkit-line-clamp:2;color:var(--text-secondary)}
+.kanban-card.kanban-child .card-meta{margin-top:2px}
+.kanban-card.kanban-child .card-child-badge{font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;font-weight:500}
+.kanban-card.kanban-child .card-child-gutter{display:flex;flex-direction:column;align-items:center;width:10px;flex-shrink:0;padding-top:2px}
+.kanban-card.kanban-child .card-child-dot{width:6px;height:6px;border-radius:50%;background:var(--border-strong);flex-shrink:0}
+.kanban-card.kanban-child .card-child-line{width:2px;flex:1;min-height:12px;background:var(--border-strong);border-radius:1px;flex-shrink:0;margin-bottom:2px}
 .kanban-column.collapsed{min-height:auto!important;flex:0 0 auto!important}
 .kanban-column.collapsed .kanban-cards{display:none}
 

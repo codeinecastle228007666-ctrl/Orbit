@@ -22,11 +22,15 @@ function renderKanban() {
     const children = colTasks.filter(t => t.parentId);
     let html = '';
     parents.forEach(p => {
-      html += renderKanbanCard(p);
-      children.filter(c => c.parentId === p.id).forEach(c => html += renderKanbanCard(c, true));
+      const subs = children.filter(c => c.parentId === p.id);
+      if (subs.length) {
+        html += `<div class="kanban-group">${renderKanbanCard(p)}${subs.map(c => renderKanbanCard(c, true)).join('')}</div>`;
+      } else {
+        html += renderKanbanCard(p);
+      }
     });
     const orphaned = children.filter(c => !parents.some(p => p.id === c.parentId));
-    orphaned.forEach(c => html += renderKanbanCard(c, true));
+    orphaned.forEach(c => html += `<div class="kanban-group">${renderKanbanCard(c, true)}</div>`);
     $(`count-${st}`).textContent = colTasks.length;
     $(`cards-${st}`).innerHTML = html;
   });
@@ -49,9 +53,13 @@ function renderKanbanCard(t, isChild) {
 
   if (isChild) {
     return `<div class="${classes.join(' ')}" data-id="${t.id}" draggable="true">
-      <div class="card-child-line"></div>
+      <div class="card-child-gutter">
+        <div class="card-child-line"></div>
+        <div class="card-child-dot"></div>
+      </div>
       <div style="flex:1;min-width:0">
-        <div class="card-title" style="font-size:12px;margin-bottom:3px">${esc(t.title)}</div>
+        <div class="card-child-badge">↳ подзадача</div>
+        <div class="card-title" style="font-size:12px;font-weight:500;margin-bottom:3px">${esc(t.title)}</div>
         <div class="card-meta">${tagsHtml}${dueHtml}</div>
       </div>
       <div class="card-actions" style="position:static;display:flex;gap:2px;flex-shrink:0">
