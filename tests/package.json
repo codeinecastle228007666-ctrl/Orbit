@@ -1,0 +1,8 @@
+{
+  "name": "orbit-tests",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }
+}

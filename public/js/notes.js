@@ -1,7 +1,8 @@
 /* ═══ Orbit — Notes ═══ */
 
 function renderNotes() {
-  $('notes-list').innerHTML = notes.map(n => {
+  const filtered = noteSearch ? notes.filter(n => (n.title || '').toLowerCase().includes(noteSearch) || (n.content || '').toLowerCase().includes(noteSearch)) : notes;
+  $('notes-list').innerHTML = filtered.map(n => {
     const preview = (n.content || '').slice(0, 60);
     return `<div class="note-item${editingNoteId === n.id ? ' active' : ''}" data-id="${n.id}" onclick="selectNote('${n.id}')">
       <div class="note-title">${esc(n.title || 'Без названия')}</div>
@@ -12,10 +13,33 @@ function renderNotes() {
   if (editingNoteId) {
     const note = notes.find(n => n.id === editingNoteId);
     if (note) {
-      $('notes-editor').innerHTML = `<input type="text" id="note-title-input" value="${esc(note.title || '')}" placeholder="Заголовок" oninput="scheduleNoteSave()">
-        <textarea id="note-content-input" placeholder="Содержание..." oninput="scheduleNoteSave()">${esc(note.content || '')}</textarea>`;
+      $('notes-editor').innerHTML = `<div style="display:flex;gap:6px;margin-bottom:10px;align-items:center">
+        <input type="text" id="note-title-input" value="${esc(note.title || '')}" placeholder="Заголовок" style="flex:1;font-size:20px" oninput="scheduleNoteSave()">
+        <button class="btn btn-sm btn-ghost" id="btn-note-preview" onclick="toggleNotePreview()" title="Предпросмотр">👁</button>
+      </div>
+      <div id="note-content-wrap">
+        <textarea id="note-content-input" placeholder="Содержание... **жирный**, *курсив*, # заголовок, - список" oninput="scheduleNoteSave()">${esc(note.content || '')}</textarea>
+      </div>`;
     }
   }
+}
+
+function toggleNotePreview() {
+  const wrap = $('note-content-wrap');
+  const textarea = $('note-content-input');
+  if (!wrap || !textarea) return;
+  const existing = wrap.querySelector('.note-preview-html');
+  if (existing) {
+    existing.remove();
+    textarea.style.display = '';
+    return;
+  }
+  textarea.style.display = 'none';
+  const div = document.createElement('div');
+  div.className = 'note-preview-html';
+  div.style.cssText = 'flex:1;overflow-y:auto;padding:12px 0;font-size:14px;line-height:1.7;color:var(--text-primary)';
+  div.innerHTML = mdToHtml(textarea.value);
+  wrap.appendChild(div);
 }
 
 function selectNote(id) {
@@ -63,6 +87,7 @@ function renderDailyNotes() {
   $('daily-notes-title').value = d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   api('GET', '/daily-notes').then(list => {
+    if (currentView !== 'daily-notes') return;
     allDailyNotes = list;
     $('daily-notes-list').innerHTML = list.map(item => {
       const dp = item.date.split('-').map(Number);
@@ -75,11 +100,12 @@ function renderDailyNotes() {
         <div class="note-preview">${esc(preview) || '&nbsp;'}</div>
       </div>`;
     }).join('') || '<div style="text-align:center;padding:20px;color:var(--text-tertiary)">Нет записей</div>';
-  }).catch(() => {});
+  }).catch(e => console.error('Daily notes list error:', e));
 
   api('GET', '/daily-notes/' + dailyNotesDate).then(note => {
+    if (currentView !== 'daily-notes') return;
     $('daily-notes-content').value = note.content || '';
-  }).catch(() => {});
+  }).catch(e => console.error('Daily note content error:', e));
 }
 
 function scheduleDailyNotesSave() {

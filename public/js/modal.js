@@ -27,9 +27,11 @@ function openTaskModal(task) {
     parentSel.innerHTML += `<option value="${t.id}"${task && task.parentId === t.id ? ' selected' : ''}>${esc(t.title)}</option>`;
   });
 
-  // Comments
+  // Comments (guard: only apply if still the same task)
   if (task) {
-    api('GET', '/comments/' + task.id).then(comments => {
+    const taskId = task.id;
+    api('GET', '/comments/' + taskId).then(comments => {
+      if (editingTaskId !== taskId) return;
       $('comments-list').innerHTML = comments.map(c => {
         const dt = new Date(c.timestamp);
         const time = String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0');
@@ -38,7 +40,7 @@ function openTaskModal(task) {
           <span style="color:var(--text-tertiary);font-family:JetBrains Mono,monospace;font-size:10px">${time}</span>
         </div>`;
       }).join('') || '<div style="font-size:12px;color:var(--text-tertiary)">Нет комментариев</div>';
-    });
+    }).catch(e => console.error('Comments load error:', e));
   } else {
     $('comments-list').innerHTML = '';
   }
@@ -162,13 +164,23 @@ async function saveTask() {
 }
 
 async function deleteTask(id) {
-  confirmAction('Удалить задачу?', async () => {
+  confirmAction('Отправить в архив?', async () => {
     try {
       await api('DELETE', '/tasks/' + id);
       tasks = await api('GET', '/tasks');
       activity = await api('GET', '/activity?days=14');
-      showToast('Задача удалена', 'success', 1500);
+      showToast('Задача в архиве', 'success', 1500);
       rerender();
     } catch (e) { showToast('Ошибка: ' + e.message, 'error'); }
-  }, { danger: true, okLabel: 'Удалить' });
+  }, { danger: true, okLabel: 'Архив' });
+}
+
+async function restoreTask(id) {
+  try {
+    await api('POST', '/tasks/' + id + '/restore');
+    tasks = await api('GET', '/tasks');
+    activity = await api('GET', '/activity?days=14');
+    showToast('Задача восстановлена', 'success', 1500);
+    rerender();
+  } catch (e) { showToast('Ошибка: ' + e.message, 'error'); }
 }

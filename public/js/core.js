@@ -65,6 +65,8 @@ let editingNoteId = null;
 let dragSrcId = null;
 let kanbanFilter = 'all';
 let noteSaveTimer = null;
+let noteSearch = '';
+let showArchived = false;
 let dailyNotesDate = todayStr();
 let dailyNotesSaveTimer = null;
 let allDailyNotes = [];
@@ -107,10 +109,10 @@ function restoreTimerState() {
     const taskName = task ? task.title : 'Неизвестная задача';
     if (task && timerElapsed > 0) {
       task.actualTime = (task.actualTime || 0) + timerElapsed;
-      api('PUT', '/tasks/' + task.id, { actualTime: task.actualTime }).catch(() => {});
+      api('PUT', '/tasks/' + task.id, { actualTime: task.actualTime }).catch(e => console.error('Timer restore task error:', e));
     }
     if (timerEntryId) {
-      api('PUT', '/time-entries/' + timerEntryId, { endTime: Date.now(), duration: timerElapsed }).catch(() => {});
+      api('PUT', '/time-entries/' + timerEntryId, { endTime: Date.now(), duration: timerElapsed }).catch(e => console.error('Timer restore entry error:', e));
     }
     showToast('⏱ ' + taskName + ': +' + formatTimerTime(timerElapsed) + ' (восстановлено)', 'success', 5000);
   } else if (state.elapsed > 0) {
@@ -118,10 +120,10 @@ function restoreTimerState() {
     const taskName = task ? task.title : 'Неизвестная задача';
     if (task && state.elapsed > 0) {
       task.actualTime = (task.actualTime || 0) + state.elapsed;
-      api('PUT', '/tasks/' + task.id, { actualTime: task.actualTime }).catch(() => {});
+      api('PUT', '/tasks/' + task.id, { actualTime: task.actualTime }).catch(e => console.error('Timer restore task error:', e));
     }
     if (timerEntryId) {
-      api('PUT', '/time-entries/' + timerEntryId, { endTime: Date.now(), duration: state.elapsed }).catch(() => {});
+      api('PUT', '/time-entries/' + timerEntryId, { endTime: Date.now(), duration: state.elapsed }).catch(e => console.error('Timer restore entry error:', e));
     }
     showToast('⏱ ' + taskName + ': +' + formatTimerTime(state.elapsed) + ' (сохранено)', 'success', 5000);
   }
@@ -138,6 +140,19 @@ function restoreTimerState() {
 function $(id) { return document.getElementById(id); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 function todayStr() { return new Date().toISOString().slice(0, 10); }
+function mdToHtml(text) {
+  if (!text) return '';
+  let h = esc(text);
+  h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>').replace(/^## (.+)$/gm, '<h2>$1</h2>').replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>');
+  h = h.replace(/`(.+?)`/g, '<code>$1</code>');
+  h = h.replace(/^- (.+)$/gm, '<li>$1</li>').replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+  h = h.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+  h = h.replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>');
+  h = '<p>' + h + '</p>';
+  h = h.replace(/<p><\/p>/g, '');
+  return h;
+}
 function fmtDate(s) {
   if (!s) return '';
   const parts = s.split('-');
@@ -207,6 +222,32 @@ function showToast(message, type = 'info', duration = 3000) {
   c.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 260); }, duration);
 }
+
+/* ═══ WEB SOCKET ═══ */
+let ws = null;
+let wsReconnectTimer = null;
+let wsMessageHandler = null;
+
+function wsConnect() {
+  let delay = 1000;
+  function connect() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    try {
+      ws = new WebSocket(proto + '//' + location.host);
+      ws.onmessage = e => {
+        delay = 1000;
+        let msg;
+        try { msg = JSON.parse(e.data); } catch (_) { return; }
+        if (msg.type !== 'connected' && wsMessageHandler) wsMessageHandler(msg);
+      };
+      ws.onclose = () => { wsReconnectTimer = setTimeout(connect, delay); delay = Math.min(delay * 2, 30000); };
+      ws.onerror = () => { try { ws.close(); } catch (_) {} };
+    } catch (_) { wsReconnectTimer = setTimeout(connect, delay); delay = Math.min(delay * 2, 30000); }
+  }
+  connect();
+}
+function wsDisconnect() { clearTimeout(wsReconnectTimer); if (ws) { ws.onclose = null; ws.close(); ws = null; } }
 
 function confirmAction(message, onConfirm, opts = {}) {
   const overlay = document.createElement('div');

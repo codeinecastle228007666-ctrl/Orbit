@@ -42,9 +42,11 @@ function renderKanbanCard(t, isChild) {
   const overdue = t.status !== 'done' && t.dueDate && isOverdue(t.dueDate);
   const dueToday = t.dueDate === todayStr() && t.status !== 'done';
   const classes = ['kanban-card', `priority-${t.priority}`];
+  const archived = t.archived === 1 || t.archived === '1' || t.archived === true;
   if (overdue) classes.push('overdue');
   if (dueToday) classes.push('due-today');
   if (isChild) classes.push('kanban-child');
+  if (archived) classes.push('archived');
 
   const dueHtml = t.dueDate ? `<span class="due">${overdue ? '⚠️' : ''}${fmtDate(t.dueDate)}</span>` : '';
   const tagsHtml = (t.tags || []).map(tg => `<span class="tag">#${esc(tg)}</span>`).join('');
@@ -71,7 +73,7 @@ function renderKanbanCard(t, isChild) {
   return `<div class="${classes.join(' ')}" data-id="${t.id}" draggable="true">
     <div class="card-actions">
       <button class="btn-card-edit" title="Редактировать"><span data-icon="edit"></span></button>
-      <button class="btn-card-focus" title="Фокус">⛶</button>
+      ${archived ? `<button class="btn-card-restore" title="Восстановить">↩</button>` : `<button class="btn-card-focus" title="Фокус">⛶</button>`}
       <button class="btn-card-delete" title="Удалить"><span data-icon="trash"></span></button>
     </div>
     <div class="card-title">${esc(t.title)}</div>

@@ -23,7 +23,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ─── TASKS ───────────────────────────────────────────────────
 app.get('/api/tasks', (req, res) => {
   try {
-    const rows = dbAll(db, 'SELECT * FROM tasks ORDER BY createdAt DESC');
+    let sql = 'SELECT * FROM tasks';
+    const params = [];
+    if (req.query.archived === 'true') {
+      sql += ' WHERE archived = 1';
+    } else if (req.query.all !== 'true') {
+      sql += ' WHERE archived IS NULL OR archived = 0';
+    }
+    sql += ' ORDER BY createdAt DESC';
+    const rows = dbAll(db, sql, params);
     res.json(rows.map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -110,18 +118,23 @@ app.put('/api/tasks/:id', (req, res) => {
 
 app.delete('/api/tasks/:id', (req, res) => {
   try {
-    const children = dbAll(db, 'SELECT id FROM tasks WHERE parentId = ?', [req.params.id]);
-    for (const c of children) {
-      dbRun(db, 'DELETE FROM schedule WHERE taskId = ?', [c.id]);
-      logActivity(db, c.id, 'deleted');
-    }
-    dbRun(db, 'DELETE FROM tasks WHERE parentId = ?', [req.params.id]);
-    dbRun(db, 'DELETE FROM tasks WHERE id = ?', [req.params.id]);
+    dbRun(db, 'UPDATE tasks SET archived = 1 WHERE id = ? OR parentId = ?', [req.params.id, req.params.id]);
     dbRun(db, 'DELETE FROM schedule WHERE taskId = ?', [req.params.id]);
-    dbRun(db, 'DELETE FROM task_links WHERE sourceId = ? OR targetId = ?', [req.params.id, req.params.id]);
-    logActivity(db, req.params.id, 'deleted');
+    logActivity(db, req.params.id, 'archived');
+    const children = dbAll(db, 'SELECT id FROM tasks WHERE parentId = ?', [req.params.id]);
+    for (const c of children) { logActivity(db, c.id, 'archived'); }
     res.json({ ok: true });
     broadcast('task_deleted', { id: req.params.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tasks/:id/restore', (req, res) => {
+  try {
+    dbRun(db, 'UPDATE tasks SET archived = 0 WHERE id = ?', [req.params.id]);
+    dbRun(db, 'UPDATE tasks SET archived = 0 WHERE parentId = ?', [req.params.id]);
+    logActivity(db, req.params.id, 'restored');
+    res.json({ ok: true });
+    broadcast('task_restored', { id: req.params.id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -989,6 +1002,12 @@ function checkAchievements(db, trigger) {
     if (hour >= 22 || hour < 5) give('owl', 'Сова', 'Завершить задачу ночью', '🦉', 'time');
     if (hour >= 5 && hour < 8) give('lark', 'Жаворонок', 'Завершить задачу утром', '🌅', 'time');
     if (hour >= 12 && hour <= 13) give('lunch', 'Обеденный подвиг', 'Завершить задачу в обед', '🍔', 'time');
+    // Count from activity log for 10-task achievements
+    const doneLogs = dbAll(db, 'SELECT timestamp FROM task_activity_log WHERE action LIKE ?', ['%->done']);
+    const night = doneLogs.filter(l => { const h = new Date(l.timestamp).getHours(); return h >= 22 || h < 5; }).length;
+    const morn = doneLogs.filter(l => { const h = new Date(l.timestamp).getHours(); return h >= 5 && h < 8; }).length;
+    if (night >= 10) give('owl10', 'Ночная сова', '10 задач ночью', '🦉', 'time');
+    if (morn >= 10) give('lark10', 'Жаворонок', '10 задач утром', '🌅', 'time');
   }
 
   // ── Tags ──
@@ -1117,6 +1136,13 @@ app.delete('/api/public/token', (req, res) => {
 });
 
 // ─── BACKUPS ─────────────────────────────────────────────────
+app.post('/api/backups', (req, res) => {
+  try {
+    saveDb(db, true);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/backups', (req, res) => {
   try {
     const dir = path.join(__dirname, 'data', 'backups');

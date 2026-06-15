@@ -288,6 +288,7 @@ body{
 @keyframes cardIn{from{opacity:0;transform:translateY(8px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 .kanban-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-hover);border-left-color:var(--accent)}
 .kanban-card.dragging{opacity:0.4;transform:scale(.96) rotate(1.5deg)}
+.kanban-card.archived{opacity:0.6;outline:1px dashed var(--border-color)}
 .kanban-card.overdue{border-left-color:var(--danger)!important;background:linear-gradient(to right,var(--danger-soft),var(--bg-secondary) 30%)}
 .kanban-card.due-today{border-left-color:var(--warning)!important}
 .kanban-card.priority-high{border-left-color:var(--danger)}.kanban-card.priority-medium{border-left-color:var(--warning)}.kanban-card.priority-low{border-left-color:var(--success)}
@@ -383,6 +384,7 @@ mark{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding
 .notes-editor textarea{flex:1;width:100%;border:none;resize:none;font-size:14px;line-height:1.7;background:none;color:var(--text-primary);outline:none;font-family:inherit}
 .notes-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);font-size:14px;flex-direction:column;gap:14px;text-align:center}
 .notes-empty svg{width:48px;height:48px;stroke-width:1.4;color:var(--text-tertiary)}
+.note-preview-html h1{font-size:22px;margin:0 0 10px}.note-preview-html h2{font-size:18px;margin:0 0 8px}.note-preview-html h3{font-size:15px;margin:0 0 6px}.note-preview-html ul{margin:6px 0;padding-left:20px}.note-preview-html li{margin:3px 0}.note-preview-html code{background:var(--bg-secondary);padding:2px 5px;border-radius:3px;font-size:13px}.note-preview-html p{margin:0 0 8px}
 
 /* ═══ CALENDAR ═══ */
 .calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}

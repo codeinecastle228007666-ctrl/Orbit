@@ -60,12 +60,18 @@
         <div class="chart-card" style="margin-top:16px"><h3>Активность (7 дней × 24 часа)</h3><div id="heatmap-container"></div></div>
         <div class="chart-card" style="margin-top:16px"><h3>🏆 Достижения</h3><div id="ach-dash-content">Загрузка...</div></div>
         <div class="chart-card" style="margin-top:16px"><h3>📊 Отчёт за неделю</h3><div id="report-container">Загрузка...</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+          <div class="chart-card"><h3>📈 Задачи по дням</h3><div id="weekly-chart" style="height:160px"></div></div>
+          <div class="chart-card"><h3>🏷️ Время по тегам</h3><div id="tag-chart" style="height:160px"></div></div>
+        </div>
+        <div class="chart-card" style="margin-top:16px"><h3>⏰ Продуктивность по часам</h3><div id="productivity-chart" style="height:100px"></div></div>
       </section>
 
       <!-- KANBAN -->
       <section class="view" id="view-kanban">
         <div class="view-header"><h1>Канбан-доска</h1>
           <div class="view-header-actions">
+            <button class="btn btn-sm btn-ghost" id="btn-toggle-archived" title="Показать архив">🗄️</button>
             <button class="btn btn-primary" id="btn-new-task"><span data-icon="plus"></span>Новая задача</button>
           </div>
         </div>
@@ -156,7 +162,10 @@
       <!-- NOTES -->
       <section class="view" id="view-notes">
         <div class="view-header"><h1>Заметки</h1>
-          <div class="view-header-actions"><button class="btn btn-primary" id="btn-new-note"><span data-icon="plus"></span>Новая заметка</button></div>
+          <div class="view-header-actions">
+            <span class="search-wrap" style="margin:0"><span data-icon="search"></span><input type="text" id="notes-search" class="input-search" placeholder="Поиск..." style="width:160px"></span>
+            <button class="btn btn-primary" id="btn-new-note"><span data-icon="plus"></span>Новая заметка</button>
+          </div>
         </div>
         <div class="notes-layout">
           <div class="notes-list" id="notes-list"></div>
@@ -281,6 +290,7 @@
         <div class="settings-section"><h3>Данные</h3>
           <div class="setting-row"><div><div class="setting-label">Экспорт JSON</div><div class="setting-desc">Скачать все данные</div></div><button class="btn" id="btn-export"><span data-icon="download"></span>Экспорт</button></div>
           <div class="setting-row"><div><div class="setting-label">Импорт JSON</div><div class="setting-desc">Восстановить из файла</div></div><div><button class="btn" id="btn-import"><span data-icon="upload"></span>Импорт</button><input type="file" id="import-file" accept=".json" style="display:none"></div></div>
+          <div class="setting-row"><div><div class="setting-label">Бекап БД</div><div class="setting-desc">Создать копию базы данных</div></div><button class="btn" id="btn-backup"><span data-icon="save"></span>Бекап</button></div>
           <div class="setting-row" style="border:none;padding-top:8px"><button class="btn btn-danger" id="btn-clear"><span data-icon="trash"></span>Очистить все данные</button></div>
         </div>
       </section>

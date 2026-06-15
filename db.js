@@ -196,6 +196,7 @@ async function initDb() {
     if (!names.includes('actualTime')) db.run("ALTER TABLE tasks ADD COLUMN actualTime INTEGER DEFAULT 0");
     if (!names.includes('recurring')) db.run("ALTER TABLE tasks ADD COLUMN recurring TEXT DEFAULT NULL");
     if (!names.includes('favorite')) db.run("ALTER TABLE tasks ADD COLUMN favorite INTEGER DEFAULT 0");
+    if (!names.includes('archived')) db.run("ALTER TABLE tasks ADD COLUMN archived INTEGER DEFAULT 0");
   }
 
   // Migration: rename crm_days_active → ptm_days_active

@@ -81,6 +81,55 @@ async function renderReport() {
       ${r.topTags.length ? `<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"><span style="font-size:9px;color:var(--text-tertiary);font-weight:600">Теги:</span>${r.topTags.map(t => `<span style="font-size:9px;padding:3px 6px;border-radius:4px;background:var(--bg-tertiary);color:var(--accent)">#${esc(t.name)} ${t.count}</span>`).join('')}</div>` : ''}
     </div>`;
   } catch (_) { el.innerHTML = ''; }
+
+  // Weekly chart
+  try {
+    const r2 = await api('GET', '/analytics/report?period=week');
+    const days = r2.dailyBreakdown;
+    const maxVal = Math.max(1, ...days.map(d => d.tasks_done + d.xp));
+    const dayLabels = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+    $('weekly-chart').innerHTML = `<div style="display:flex;align-items:end;gap:4px;height:140px;padding:10px 0">${days.map(d => {
+      const h1 = Math.max(2, Math.round(d.tasks_done / maxVal * 110));
+      const h2 = Math.max(2, Math.round(d.xp / maxVal * 110));
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:end;height:100%">
+        <div style="width:14px;background:var(--accent);border-radius:4px 4px 0 0;height:${h2}px;margin-bottom:1px" title="XP: ${d.xp}"></div>
+        <div style="width:14px;background:var(--success);border-radius:4px 4px 0 0;height:${h1}px" title="Задач: ${d.tasks_done}"></div>
+        <div style="font-size:8px;color:var(--text-tertiary);margin-top:4px">${dayLabels[new Date(d.date + 'T00:00:00').getDay()]}</div>
+      </div>`;
+    }).join('')}</div>`;
+  } catch (_) { $('weekly-chart').innerHTML = ''; }
+
+  // Tag time chart
+  try {
+    const tags = await api('GET', '/analytics/time-by-tag');
+    const entries = Object.entries(tags).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const maxMin = Math.max(1, ...entries.map(e => e[1]));
+    $('tag-chart').innerHTML = entries.length ? `<div style="display:flex;flex-direction:column;gap:4px;padding:10px 0">${entries.map(([name, mins]) => {
+      const pct = Math.round(mins / maxMin * 100);
+      return `<div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:9px;color:var(--text-secondary);width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0">#${esc(name)}</span>
+        <div style="flex:1;height:14px;background:var(--bg-tertiary);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:4px;transition:width .6s"></div>
+        </div>
+        <span style="font-size:9px;color:var(--text-tertiary);font-family:JetBrains Mono,monospace;width:40px;text-align:right">${Math.round(mins)}м</span>
+      </div>`;
+    }).join('')}</div>` : '<div style="padding:10px;text-align:center;color:var(--text-tertiary);font-size:12px">Нет данных</div>';
+  } catch (_) { $('tag-chart').innerHTML = ''; }
+
+  // Productivity chart
+  try {
+    const prod = await api('GET', '/analytics/productivity?days=14');
+    const bars = prod.heatmap || [];
+    const maxW = Math.max(1, ...bars.map(h => h.weight));
+    $('productivity-chart').innerHTML = `<div style="display:flex;align-items:end;gap:2px;height:80px;padding:10px 0">${bars.filter(h => h.hour >= 6 && h.hour <= 23).map(h => {
+      const ht = Math.max(2, Math.round(h.weight / maxW * 60));
+      const isGolden = prod.goldenHours && prod.goldenHours.includes(h.hour);
+      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:end;height:100%">
+        <div style="width:100%;background:${isGolden ? 'var(--warning)' : 'var(--accent)'};border-radius:3px 3px 0 0;height:${ht}px;opacity:${0.3 + 0.7 * h.intensity}" title="${h.label}: ${h.count} событий"></div>
+        <div style="font-size:7px;color:var(--text-tertiary);margin-top:2px">${h.hour}</div>
+      </div>`;
+    }).join('')}</div>`;
+  } catch (_) { $('productivity-chart').innerHTML = ''; }
 }
 
 function renderAchievements() {
@@ -162,8 +211,7 @@ function renderHeatmap(activity) {
 function animateNumber(el, target, duration = 500) {
   if (!el) return;
   const start = parseInt(el.textContent.replace(/\D/g, '')) || 0;
-  const diff = target - start;
-  if (!diff) return;
+  if (target === start) { el.textContent = target; return; }
   const startT = performance.now();
   function update(now) {
     const p = Math.min(1, (now - startT) / duration);

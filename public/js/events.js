@@ -10,7 +10,17 @@ function initEvents() {
   $('theme-select').addEventListener('change', function () {
     settings.theme = this.value;
     applyTheme();
-    api('PUT', '/settings', { theme: settings.theme }).catch(() => {});
+    api('PUT', '/settings', { theme: settings.theme }).catch(e => console.error('Theme save error:', e));
+  });
+
+  // Toggle archive
+  const btnArch = $('btn-toggle-archived');
+  if (btnArch) btnArch.addEventListener('click', async () => {
+    showArchived = !showArchived;
+    btnArch.classList.toggle('active', showArchived);
+    tasks = await api('GET', '/tasks' + (showArchived ? '?all=true' : ''));
+    renderKanban();
+    showToast(showArchived ? 'Архив показан' : 'Архив скрыт', 'info', 1500);
   });
 
   // New task
@@ -62,6 +72,10 @@ function initEvents() {
       renderKanban();
     });
   });
+
+  // Notes search
+  const notesSearch = $('notes-search');
+  if (notesSearch) notesSearch.addEventListener('input', () => { noteSearch = notesSearch.value.toLowerCase(); renderNotes(); });
 
   // New note
   $('btn-new-note').addEventListener('click', async () => {
@@ -186,6 +200,15 @@ function initEvents() {
   $('slot-duration').addEventListener('change', function () { api('PUT', '/settings', { slotDuration: this.value }); settings.slotDuration = this.value; });
   $('ai-key').addEventListener('change', function () { api('PUT', '/settings', { aiKey: this.value }); settings.aiKey = this.value; });
 
+  // Backup
+  const btnBackup = $('btn-backup');
+  if (btnBackup) btnBackup.addEventListener('click', async () => {
+    try {
+      await api('POST', '/api/backups');
+      showToast('Бекап создан', 'success');
+    } catch (e) { showToast('Ошибка бекапа', 'error'); }
+  });
+
   // Export
   $('btn-export').addEventListener('click', async () => {
     const data = { tasks, schedule, notes, settings, links };
@@ -263,7 +286,8 @@ function initEvents() {
   // Global hotkeys
   document.addEventListener('keydown', e => {
     const tag = e.target.tagName;
-    const modalOpen = $('task-modal').classList.contains('open');
+    const modalEl = $('task-modal');
+    const modalOpen = modalEl && modalEl.classList.contains('open');
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
       if (e.key === 'Escape' && modalOpen) closeTaskModal();
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && modalOpen) { e.preventDefault(); saveTask(); }
@@ -298,6 +322,7 @@ function initEvents() {
         e.stopPropagation();
         if (btn.matches('.btn-card-edit')) { openTaskModal(task); return; }
         if (btn.matches('.btn-card-delete')) { deleteTask(task.id); return; }
+        if (btn.matches('.btn-card-restore')) { restoreTask(task.id); return; }
         if (btn.matches('.btn-card-timer-toggle')) { toggleCardTimer(task.id); return; }
         if (btn.matches('.btn-card-timer-stop')) { stopCardTimer(); return; }
         if (btn.matches('.btn-card-focus')) { focusGraphTask(task.id); return; }
