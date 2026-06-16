@@ -1046,64 +1046,138 @@ function playGraphHistory() {
   const W = container?.clientWidth || 800;
   const H = container?.clientHeight || 600;
 
-  // Build full graph data once, hide all nodes initially
-  buildGraphData();
-  gNodes.forEach(n => { n.x = W / 2; n.y = H / 2; });
-  gEdges.length = 0;
+  stopGraphIdleAnim();
+  if (_graphRenderRaf) { cancelAnimationFrame(_graphRenderRaf); _graphRenderRaf = null; }
 
-  gHistoryPlay = { idx: 0, sorted, stop: false, step: 0, maxSteps: sorted.length + 2 };
+  // Build full graph data, assign each node a random off-screen position
+  buildGraphData();
+  gNodes.forEach(n => { n.x = -999; n.y = -999; n._revealed = false; });
+  gEdges.length = 0; // edges added as nodes appear
+
+  gHistoryPlay = { sorted, stop: false, step: 0 };
 
   const btn = $('btn-graph-history');
   if (btn) btn.textContent = '⏹ Стоп';
 
-  renderGraphSvg();
+  // Clear old SVG
+  const oldSvg = container.querySelector('#graph-svg');
+  if (oldSvg) oldSvg.remove();
+
+  // Build fresh SVG with all nodes hidden at -999,-999
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.id = 'graph-svg';
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const defs = document.createElementNS(ns, 'defs');
+  defs.innerHTML = '<filter id="glow-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="glow-strong" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="glow-edge" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+  svg.appendChild(defs);
+
+  const gRoot = document.createElementNS(ns, 'g');
+  gRoot.id = 'graph-root';
+
+  const gEdgesGroup = document.createElementNS(ns, 'g');
+  gEdgesGroup.id = 'graph-edges';
+  gRoot.appendChild(gEdgesGroup);
+
+  const gParticlesGroup = document.createElementNS(ns, 'g');
+  gParticlesGroup.id = 'graph-particles';
+  gRoot.appendChild(gParticlesGroup);
+
+  const gNodesGroup = document.createElementNS(ns, 'g');
+  gNodesGroup.id = 'graph-nodes';
+
+  gNodes.forEach(n => {
+    const g = document.createElementNS(ns, 'g');
+    g.setAttribute('data-id', n.id);
+    g.classList.add('graph-node');
+    g.style.cursor = 'pointer';
+    g.setAttribute('transform', `translate(${n.x},${n.y})`);
+    g.style.opacity = '0';
+    g.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+
+    const r = n.size || 7;
+    let fillColor;
+    if (n.status === 'done') fillColor = '#6f9c5e';
+    else if (n.priority === 'high') fillColor = '#d47a5a';
+    else if (n.priority === 'medium') fillColor = '#d49a3a';
+    else if (n.priority === 'low') fillColor = '#85ad72';
+    else fillColor = '#a8a094';
+
+    const circle = document.createElementNS(ns, 'circle');
+    circle.setAttribute('r', r);
+    circle.setAttribute('fill', fillColor);
+    circle.setAttribute('stroke', 'rgba(255,255,255,0.12)');
+    circle.setAttribute('stroke-width', '1.5');
+    circle.setAttribute('filter', 'url(#glow-soft)');
+    circle.style.opacity = '0.85';
+    circle.classList.add('graph-node-circle');
+    g.appendChild(circle);
+
+    const label = document.createElementNS(ns, 'text');
+    label.setAttribute('y', -r - 8);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('fill', '#c8c0b4');
+    label.setAttribute('font-size', '10');
+    label.setAttribute('font-family', 'Inter, sans-serif');
+    label.textContent = n.label.length > 20 ? n.label.slice(0, 19) + '…' : n.label;
+    label.style.opacity = '0.8';
+    label.classList.add('graph-node-label');
+    g.appendChild(label);
+
+    gNodesGroup.appendChild(g);
+  });
+  gRoot.appendChild(gNodesGroup);
+  svg.appendChild(gRoot);
+  container.appendChild(svg);
+
+  const oldBar = container.querySelector('#graph-info-bar');
+  if (oldBar) oldBar.remove();
+  const infoBar = document.createElement('div');
+  infoBar.id = 'graph-info-bar';
+  infoBar.innerHTML = '<span id="graph-info" style="font-size:12px;color:var(--text-secondary)">История: 0/' + sorted.length + '</span>';
+  container.appendChild(infoBar);
 
   function tick() {
-    if (gHistoryPlay.stop) { gHistoryPlay = null; if (btn) btn.textContent = '▶ История'; return; }
+    if (gHistoryPlay.stop) { gHistoryPlay = null; if (btn) btn.textContent = '▶ История'; renderGraph(); return; }
 
     const step = gHistoryPlay.step;
     gHistoryPlay.step++;
 
-    if (step < gHistoryPlay.sorted.length) {
-      const task = gHistoryPlay.sorted[step];
+    if (step < sorted.length) {
+      const task = sorted[step];
       const node = gNodeMap[task.id];
       if (node) {
-        // Place node at random position
-        node.x = 100 + Math.random() * (W - 200);
-        node.y = 100 + Math.random() * (H - 200);
+        node.x = 80 + Math.random() * (W - 160);
+        node.y = 60 + Math.random() * (H - 120);
+        node._revealed = true;
 
-        // Add edges for this node
+        // Add edges connected to this node (only between revealed nodes)
         links.forEach(l => {
           const s = gNodeMap[l.sourceId], t = gNodeMap[l.targetId];
-          if (s && t && (s.id === node.id || t.id === node.id)) {
+          if (s && t && s._revealed && t._revealed && (s.id === node.id || t.id === node.id)) {
             if (!gEdges.some(e => (e.source === s && e.target === t) || (e.source === t && e.target === s))) {
               gEdges.push({ source: s, target: t, type: l.type || 'related' });
             }
           }
         });
-        // Add parent-child edges
-        if (task.parentId && gNodeMap[task.parentId]) {
+        if (task.parentId && gNodeMap[task.parentId] && gNodeMap[task.parentId]._revealed) {
           const s = node, t = gNodeMap[task.parentId];
           if (!gEdges.some(e => (e.source === s && e.target === t) || (e.source === t && e.target === s))) {
             gEdges.push({ source: s, target: t, type: 'parent' });
           }
         }
 
-        // Recompute target positions for visible nodes
-        const visible = gNodes.filter(nn => nn.x !== W / 2 || nn.y !== H / 2);
+        // Run mini-layout on revealed nodes
+        const visible = gNodes.filter(nn => nn._revealed);
         if (visible.length > 1) runMiniLayout(visible);
 
-        // Update the SVG
-        const svg = document.querySelector('#graph-svg');
-        if (!svg) return;
-        const edgesGroup = svg.querySelector('#graph-edges');
-        const nodesGroup = svg.querySelector('#graph-nodes');
-        if (!edgesGroup || !nodesGroup) return;
-
-        // Regenerate edges SVG
-        edgesGroup.innerHTML = '';
+        // Update edges SVG
+        gEdgesGroup.innerHTML = '';
         gEdges.forEach((e, idx) => {
-          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          const path = document.createElementNS(ns, 'path');
           path.setAttribute('d', edgeCurve(e, idx).d);
           const isParent = e.type === 'parent';
           const color = isParent ? 'rgba(224,176,92,0.35)' : 'rgba(133,173,114,0.2)';
@@ -1113,52 +1187,44 @@ function playGraphHistory() {
           if (isParent) path.setAttribute('stroke-dasharray', '5,4');
           path.classList.add('graph-edge');
           path.dataset.edgeIdx = idx;
-          edgesGroup.appendChild(path);
+          gEdgesGroup.appendChild(path);
         });
 
-        // Position this node
-        const nodeG = nodesGroup.querySelector(`.graph-node[data-id="${node.id}"]`);
+        // Show and position this node
+        const nodeG = gNodesGroup.querySelector(`.graph-node[data-id="${node.id}"]`);
         if (nodeG) {
           nodeG.setAttribute('transform', `translate(${node.x},${node.y})`);
-          nodeG.style.opacity = '0';
-          nodeG.style.transition = 'opacity 0.4s ease';
-          requestAnimationFrame(() => { nodeG.style.opacity = '1'; });
+          nodeG.style.opacity = '1';
         }
 
-        // Update info
         const info = $('graph-info');
-        if (info) info.textContent = `История: ${step + 1}/${gHistoryPlay.sorted.length} · 🕐 ${esc(task.title)}`;
+        if (info) info.textContent = `История: ${step + 1}/${sorted.length} · 🕐 ${esc(task.title)}`;
       }
-    } else if (step === gHistoryPlay.sorted.length) {
-      // Final relaxation pass
+    } else {
+      // Final: run full layout + save positions
       runMiniLayout(gNodes);
-      // Redraw all edges
-      const edgesGroup = document.querySelector('#graph-edges');
-      if (edgesGroup) {
-        edgesGroup.innerHTML = '';
-        gEdges.forEach((e, idx) => {
-          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path.setAttribute('d', edgeCurve(e, idx).d);
-          const isParent = e.type === 'parent';
-          const color = isParent ? 'rgba(224,176,92,0.35)' : 'rgba(133,173,114,0.2)';
-          path.setAttribute('stroke', color);
-          path.setAttribute('stroke-width', isParent ? '2' : '1');
-          path.setAttribute('fill', 'none');
-          if (isParent) path.setAttribute('stroke-dasharray', '5,4');
-          path.classList.add('graph-edge');
-          path.dataset.edgeIdx = idx;
-          edgesGroup.appendChild(path);
-        });
-      }
-      gNodes.forEach(nn => { nn._targetX = nn.x; nn._targetY = nn.y; });
-      // Clean up history state
+      gEdgesGroup.innerHTML = '';
+      gEdges.forEach((e, idx) => {
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', edgeCurve(e, idx).d);
+        const isParent = e.type === 'parent';
+        const color = isParent ? 'rgba(224,176,92,0.35)' : 'rgba(133,173,114,0.2)';
+        path.setAttribute('stroke', color);
+        path.setAttribute('stroke-width', isParent ? '2' : '1');
+        path.setAttribute('fill', 'none');
+        if (isParent) path.setAttribute('stroke-dasharray', '5,4');
+        path.classList.add('graph-edge');
+        path.dataset.edgeIdx = idx;
+        gEdgesGroup.appendChild(path);
+      });
       if (btn) btn.textContent = '▶ История';
       gHistoryPlay = null;
+      renderGraph();
       showToast('Граф построен!', 'success', 2000);
       return;
     }
 
-    setTimeout(tick, Math.max(50, 800 - gHistoryPlay.step * 3));
+    setTimeout(tick, Math.max(50, 800 - step * 3));
   }
 
   setTimeout(tick, 300);
@@ -1167,10 +1233,10 @@ function playGraphHistory() {
 function runMiniLayout(nodes) {
   const n = nodes.length;
   if (n < 2) return;
-  const targetLen = 120;
-  const repulsionStrength = 4000;
-  const attractionStrength = 0.05;
-  const iterations = 30;
+  const targetLen = 110;
+  const repulsionStrength = 6000;
+  const attractionStrength = 0.06;
+  const iterations = 40;
 
   for (let iter = 0; iter < iterations; iter++) {
     for (let i = 0; i < n; i++) {
