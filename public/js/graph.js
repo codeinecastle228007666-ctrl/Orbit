@@ -33,12 +33,16 @@ let _minimapCanvas = null;
 
 let _graphRenderRaf = null;
 
+let gHistoryPositions = null;
+
 function renderGraph() {
   stopGraphIdleAnim();
   if (_graphRenderRaf) { cancelAnimationFrame(_graphRenderRaf); _graphRenderRaf = null; }
   initGraphUI();
   buildGraphData();
-  forceLayout(() => { renderGraphSvg(); setupGraphInteractions(); startGraphIdleAnim(); startGraphRenderLoop(); });
+  const positions = gHistoryPositions;
+  gHistoryPositions = null;
+  forceLayout(() => { renderGraphSvg(); setupGraphInteractions(); startGraphIdleAnim(); startGraphRenderLoop(); }, positions);
 }
 
 function easeInOutCubic(t) {
@@ -312,7 +316,7 @@ function buildGraphData() {
 }
 
 /* ── Force-directed layout (link-based only, no status clusters) ── */
-function forceLayout(onDone) {
+function forceLayout(onDone, startPositions) {
   const n = gNodes.length;
   if (n === 0) { if (onDone) onDone(); return; }
 
@@ -320,10 +324,11 @@ function forceLayout(onDone) {
   const W = container?.clientWidth || 800;
   const H = container?.clientHeight || 600;
 
-  // Random placement (no status-based clustering)
+  // Placement: use startPositions if provided, else random
   gNodes.forEach((nd) => {
-    nd.x = 100 + Math.random() * (W - 200);
-    nd.y = 100 + Math.random() * (H - 200);
+    const sp = startPositions && startPositions[nd.id];
+    nd.x = sp ? sp.x : 100 + Math.random() * (W - 200);
+    nd.y = sp ? sp.y : 100 + Math.random() * (H - 200);
     nd._vx = 0; nd._vy = 0;
   });
 
@@ -1083,58 +1088,14 @@ function playGraphHistory() {
         if (info) info.textContent = `История: ${step + 1}/${sorted.length} · 🕐 ${esc(task.title)}`;
       }
     } else {
-      // Build all edges from links between revealed nodes
-      links.forEach(l => {
-        const s = gNodeMap[l.sourceId], t = gNodeMap[l.targetId];
-        if (s && t && gHistoryPlay.placed.has(s.id) && gHistoryPlay.placed.has(t.id)) {
-          if (!gEdges.some(e => (e.source === s && e.target === t) || (e.source === t && e.target === s))) {
-            gEdges.push({ source: s, target: t, type: l.type || 'related' });
-          }
-        }
-      });
-      tasks.forEach(t => {
-        if (t.parentId && gNodeMap[t.parentId] && gNodeMap[t.id] && gHistoryPlay.placed.has(t.id) && gHistoryPlay.placed.has(t.parentId)) {
-          const s = gNodeMap[t.id], tg = gNodeMap[t.parentId];
-          if (!gEdges.some(e => (e.source === s && e.target === tg) || (e.source === tg && e.target === s))) {
-            gEdges.push({ source: s, target: tg, type: 'parent' });
-          }
-        }
-      });
-      // Run layout with edges to spread nodes
-      if (gNodes.length > 1) runMiniLayout(gNodes);
-
-      // Update node positions
-      gNodes.forEach(n => {
-        const ng = gNodesGroup.querySelector(`.graph-node[data-id="${n.id}"]`);
-        if (ng) ng.setAttribute('transform', `translate(${n.x},${n.y})`);
-      });
-
-      // Build edge paths and fade them in
-      gEdgesGroup.innerHTML = '';
-      gEdges.forEach((e, idx) => {
-        const path = document.createElementNS(ns, 'path');
-        path.setAttribute('d', edgeCurve(e, idx).d);
-        const isParent = e.type === 'parent';
-        path.setAttribute('stroke', isParent ? 'rgba(224,176,92,0.35)' : 'rgba(133,173,114,0.2)');
-        path.setAttribute('stroke-width', isParent ? '2' : '1');
-        path.setAttribute('fill', 'none');
-        if (isParent) path.setAttribute('stroke-dasharray', '5,4');
-        path.classList.add('graph-edge');
-        path.dataset.edgeIdx = idx;
-        path.style.opacity = '0';
-        path.style.transition = 'opacity 0.8s ease';
-        gEdgesGroup.appendChild(path);
-        requestAnimationFrame(() => { path.style.opacity = '0.6'; });
-      });
-      const info = $('graph-info');
-      if (info) info.textContent = `Граф построен: ${gNodes.length} узлов, ${gEdges.length} связей`;
-      // After edges fade in, switch to full interactive graph
-      setTimeout(() => {
-        if (btn) btn.textContent = '▶ История';
-        gHistoryPlay = null;
-        renderGraph();
-        showToast('Граф построен!', 'success', 2000);
-      }, 1000);
+      // Save current positions, then render full graph preserving them
+      const pos = {};
+      gNodes.forEach(n => { pos[n.id] = { x: n.x, y: n.y }; });
+      gHistoryPositions = pos;
+      if (btn) btn.textContent = '▶ История';
+      gHistoryPlay = null;
+      renderGraph();
+      showToast('Граф построен!', 'success', 2000);
       return;
     }
 
