@@ -144,8 +144,11 @@ function initMiniMap() {
   if (_minimapCanvas) _minimapCtx = _minimapCanvas.getContext('2d');
 }
 
+let _mmSkip = 0;
 function updateMiniMap() {
   if (!_minimapCtx || !_minimapCanvas) return;
+  _mmSkip = (_mmSkip + 1) % 4;
+  if (_mmSkip !== 0) return;
   const mc = _minimapCanvas, mctx = _minimapCtx;
   const mw = 160, mh = 100, pad = 6;
   mc.width = mw; mc.height = mh;
@@ -187,8 +190,9 @@ function updateMiniMap() {
   }
 }
 
-/* ── Idle physics animation (free-drifting, no spring anchor) ── */
+/* ── Idle physics animation (lightweight) ── */
 let _graphIdleRaf = null;
+let _graphFrameSkip = 0;
 function startGraphIdleAnim() {
   stopGraphIdleAnim();
   if (gNodes.length === 0) return;
@@ -196,23 +200,19 @@ function startGraphIdleAnim() {
   gNodes.forEach(n => {
     n._vx = (Math.random() - 0.5) * 2;
     n._vy = (Math.random() - 0.5) * 2;
-    n._mass = (n.size || 7) * 0.12;
     n._phase = Math.random() * Math.PI * 2;
   });
 
-  const damping = 0.998;
-  const repulseRadius = 80;
-  const repulseForce = 0.04;
-  const wanderForce = 0.005;
-  const maxV = 0.06;
-  const wallBounce = 0.05;
-  const driftForce = 0.001;
+  const damping = 0.995;
+  const wanderForce = 0.003;
+  const maxV = 0.04;
+  const springK = 0.001;
+  const margin = 30;
+  let lastTime = performance.now();
 
   const container = $('graph-container');
   const W = container?.clientWidth || 800;
   const H = container?.clientHeight || 600;
-  const margin = 30;
-  let lastTime = performance.now();
 
   function tick() {
     if (currentView !== 'graph') { _graphIdleRaf = null; return; }
@@ -223,84 +223,41 @@ function startGraphIdleAnim() {
     lastTime = now;
     const t = now / 1000;
 
-    // Soft spring toward resting positions (keeps nodes near layout)
-    gNodes.forEach(n => {
-      if (gPinned[n.id]) return;
-      n.x += (n._targetX - n.x) * 0.002;
-      n.y += (n._targetY - n.y) * 0.002;
-    });
-
+    // Update positions only, no O(n²) repulsion
     gNodes.forEach((n, i) => {
       if (gPinned[n.id]) return;
-      let fx = 0, fy = 0;
-      const rPhase = n._phase + t * 0.4;
-      fx += (Math.sin(rPhase * 1.1 + i * 0.7) * 0.6 + (Math.random() - 0.5) * 0.4) * wanderForce;
-      fy += (Math.cos(rPhase * 0.8 + i * 1.1) * 0.6 + (Math.random() - 0.5) * 0.4) * wanderForce;
-      fx += Math.sin(t * 0.12 + n._phase * 0.5) * driftForce;
-      fy += Math.cos(t * 0.09 + n._phase * 0.3) * driftForce;
-
-      for (let j = 0; j < gNodes.length; j++) {
-        if (j === i) continue;
-        const other = gNodes[j];
-        const dx = n.x - other.x;
-        const dy = n.y - other.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        if (dist < repulseRadius) {
-          const strength = repulseForce * (1 - dist / repulseRadius) * (1 - dist / repulseRadius);
-          fx += (dx / dist) * strength;
-          fy += (dy / dist) * strength;
-        }
-      }
-
-      n._vx += (fx / n._mass) * dt;
-      n._vy += (fy / n._mass) * dt;
+      const phase = n._phase + t * 0.3;
+      const fx = (Math.sin(phase * 1.1 + i) * 0.5) * wanderForce;
+      const fy = (Math.cos(phase * 0.8 + i) * 0.5) * wanderForce;
+      n._vx += fx * dt;
+      n._vy += fy * dt;
       n._vx *= Math.pow(damping, dt);
       n._vy *= Math.pow(damping, dt);
-      const speed = Math.sqrt(n._vx * n._vx + n._vy * n._vy);
-      if (speed > maxV) { n._vx = (n._vx / speed) * maxV; n._vy = (n._vy / speed) * maxV; }
-      n.x += n._vx * dt;
-      n.y += n._vy * dt;
-
-      if (n.x < margin) n._vx += wallBounce * dt;
-      if (n.x > W - margin) n._vx -= wallBounce * dt;
-      if (n.y < margin) n._vy += wallBounce * dt;
-      if (n.y > H - margin) n._vy -= wallBounce * dt;
+      const spd = Math.sqrt(n._vx * n._vx + n._vy * n._vy);
+      if (spd > maxV) { n._vx = (n._vx / spd) * maxV; n._vy = (n._vy / spd) * maxV; }
+      n.x += n._vx * dt + (n._targetX - n.x) * springK * dt;
+      n.y += n._vy * dt + (n._targetY - n.y) * springK * dt;
+      if (n.x < margin) n._vx += 0.5 * dt;
+      if (n.x > W - margin) n._vx -= 0.5 * dt;
+      if (n.y < margin) n._vy += 0.5 * dt;
+      if (n.y > H - margin) n._vy -= 0.5 * dt;
     });
 
-    const svg = document.querySelector('#graph-svg');
-    const edgesGroup = svg?.querySelector('#graph-edges');
-    const edgePaths = edgesGroup?.querySelectorAll('.graph-edge');
-    const particlesGroup = svg?.querySelector('#graph-particles');
-    const particles = particlesGroup?.querySelectorAll('.graph-particle');
-
-    gNodes.forEach(n => {
-      const nodeG = svg?.querySelector(`.graph-node[data-id="${n.id}"]`);
-      if (nodeG) nodeG.setAttribute('transform', `translate(${n.x},${n.y})`);
-    });
-
-    if (edgePaths) {
-      gEdges.forEach((edge, i) => {
-        if (i >= edgePaths.length) return;
-        edgePaths[i].setAttribute('d', edgeCurve(edge, i).d);
+    // Batch-update SVG every 2 frames
+    _graphFrameSkip = (_graphFrameSkip + 1) % 2;
+    if (_graphFrameSkip === 0) {
+      const svg = document.querySelector('#graph-svg');
+      gNodes.forEach(n => {
+        const nodeG = svg?.querySelector(`.graph-node[data-id="${n.id}"]`);
+        if (nodeG) nodeG.setAttribute('transform', `translate(${n.x},${n.y})`);
       });
-    }
-
-    if (particles) {
-      particles.forEach(p => {
-        const ei = parseInt(p.dataset.edgeIdx);
-        const pi = parseInt(p.dataset.pIdx);
-        const edge = gEdges[ei];
-        if (!edge) return;
-        const progress = ((t * (0.15 + ei * 0.02 + pi * 0.1)) % 1);
-        const curve = edgeCurve(edge, ei);
-        const s = edge.source, tgt = edge.target;
-        const u = 1 - progress;
-        const bx = u * u * s.x + 2 * u * progress * curve.cx + progress * progress * tgt.x;
-        const by = u * u * s.y + 2 * u * progress * curve.cy + progress * progress * tgt.y;
-        p.setAttribute('cx', bx);
-        p.setAttribute('cy', by);
-        p.setAttribute('opacity', '0.7');
-      });
+      const edgePaths = svg?.querySelectorAll('.graph-edge');
+      if (edgePaths) {
+        gEdges.forEach((edge, i) => {
+          if (i >= edgePaths.length) return;
+          edgePaths[i].setAttribute('d', edgeCurve(edge, i).d);
+        });
+      }
     }
 
     updateMiniMap();
@@ -428,19 +385,20 @@ function forceLayout(onDone) {
   if (onDone) onDone();
 }
 
-/* ── Helper: compute quadratic bezier curve for an edge ── */
+/* ── Helper: compute edge curve (straight by default for perf) ── */
 function edgeCurve(edge, edgeIdx) {
   const s = edge.source, t = edge.target;
   if (gStraightEdges) {
-    return { d: `M${s.x},${s.y} L${t.x},${t.y}`, cx: (s.x+t.x)/2, cy: (s.y+t.y)/2 };
+    return { d: `M${(s.x).toFixed(1)},${(s.y).toFixed(1)} L${(t.x).toFixed(1)},${(t.y).toFixed(1)}`, cx: (s.x+t.x)/2, cy: (s.y+t.y)/2 };
   }
+  // Simple bezier, no sqrt/division per call when straight
   const mx = (s.x + t.x) / 2, my = (s.y + t.y) / 2;
   const dx = t.x - s.x, dy = t.y - s.y;
   const len = Math.sqrt(dx * dx + dy * dy) || 1;
   const nx = -dy / len, ny = dx / len;
-  const curv = Math.min(30, len * 0.12) * (edgeIdx % 2 === 0 ? 1 : -1);
+  const curv = Math.min(24, len * 0.1) * (edgeIdx % 2 === 0 ? 1 : -1);
   const cx = mx + nx * curv, cy = my + ny * curv;
-  return { d: `M${s.x},${s.y} Q${cx},${cy} ${t.x},${t.y}`, cx, cy };
+  return { d: `M${(s.x).toFixed(1)},${(s.y).toFixed(1)} Q${(cx).toFixed(1)},${(cy).toFixed(1)} ${(t.x).toFixed(1)},${(t.y).toFixed(1)}`, cx, cy };
 }
 
 function updateEdgesForNode(node) {
@@ -536,26 +494,6 @@ function renderGraphSvg() {
     gEdgesGroup.appendChild(path);
   });
   gRoot.appendChild(gEdgesGroup);
-
-  // Particles
-  const gParticlesGroup = document.createElementNS(ns, 'g');
-  gParticlesGroup.id = 'graph-particles';
-  gEdges.forEach((e, idx) => {
-    const numP = e.type === 'parent' ? 2 : 1;
-    for (let pi = 0; pi < numP; pi++) {
-      const particle = document.createElementNS(ns, 'circle');
-      particle.setAttribute('r', e.type === 'parent' ? '2.5' : '1.8');
-      const pColor = e.type === 'parent' ? '#e0b05c' : '#85ad72';
-      particle.setAttribute('fill', pColor);
-      particle.setAttribute('opacity', '0');
-      particle.setAttribute('filter', 'url(#glow-edge)');
-      particle.classList.add('graph-particle');
-      particle.dataset.edgeIdx = idx;
-      particle.dataset.pIdx = pi;
-      gParticlesGroup.appendChild(particle);
-    }
-  });
-  gRoot.appendChild(gParticlesGroup);
 
   // Nodes
   const gNodesGroup = document.createElementNS(ns, 'g');
@@ -1031,7 +969,7 @@ function toggleGraphFilter(status) {
   renderGraph();
 }
 
-/* ── History playback: reveal nodes in creation order ── */
+/* ── History playback: quick node reveal, no edges ── */
 function playGraphHistory() {
   if (gHistoryPlay) {
     gHistoryPlay.stop = true;
@@ -1049,21 +987,23 @@ function playGraphHistory() {
   stopGraphIdleAnim();
   if (_graphRenderRaf) { cancelAnimationFrame(_graphRenderRaf); _graphRenderRaf = null; }
 
-  // Build full graph data, assign each node a random off-screen position
   buildGraphData();
-  gNodes.forEach(n => { n.x = -999; n.y = -999; n._revealed = false; });
-  gEdges.length = 0; // edges added as nodes appear
 
-  gHistoryPlay = { sorted, stop: false, step: 0 };
+  gHistoryPlay = { sorted, stop: false, step: 0, placed: new Set() };
 
   const btn = $('btn-graph-history');
   if (btn) btn.textContent = '⏹ Стоп';
 
-  // Clear old SVG
+  // Set all nodes to random positions, hidden
+  gNodes.forEach(n => {
+    n.x = 80 + Math.random() * (W - 160);
+    n.y = 60 + Math.random() * (H - 120);
+  });
+
+  // Quick render without edges or particles
   const oldSvg = container.querySelector('#graph-svg');
   if (oldSvg) oldSvg.remove();
 
-  // Build fresh SVG with all nodes hidden at -999,-999
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.id = 'graph-svg';
@@ -1071,20 +1011,8 @@ function playGraphHistory() {
   svg.setAttribute('height', H);
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
-  const defs = document.createElementNS(ns, 'defs');
-  defs.innerHTML = '<filter id="glow-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="glow-strong" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="glow-edge" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
-  svg.appendChild(defs);
-
   const gRoot = document.createElementNS(ns, 'g');
   gRoot.id = 'graph-root';
-
-  const gEdgesGroup = document.createElementNS(ns, 'g');
-  gEdgesGroup.id = 'graph-edges';
-  gRoot.appendChild(gEdgesGroup);
-
-  const gParticlesGroup = document.createElementNS(ns, 'g');
-  gParticlesGroup.id = 'graph-particles';
-  gRoot.appendChild(gParticlesGroup);
 
   const gNodesGroup = document.createElementNS(ns, 'g');
   gNodesGroup.id = 'graph-nodes';
@@ -1093,27 +1021,22 @@ function playGraphHistory() {
     const g = document.createElementNS(ns, 'g');
     g.setAttribute('data-id', n.id);
     g.classList.add('graph-node');
-    g.style.cursor = 'pointer';
     g.setAttribute('transform', `translate(${n.x},${n.y})`);
     g.style.opacity = '0';
-    g.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+    g.style.transition = 'opacity 0.3s ease';
 
     const r = n.size || 7;
     let fillColor;
     if (n.status === 'done') fillColor = '#6f9c5e';
     else if (n.priority === 'high') fillColor = '#d47a5a';
-    else if (n.priority === 'medium') fillColor = '#d49a3a';
-    else if (n.priority === 'low') fillColor = '#85ad72';
-    else fillColor = '#a8a094';
+    else fillColor = '#d49a3a';
 
     const circle = document.createElementNS(ns, 'circle');
     circle.setAttribute('r', r);
     circle.setAttribute('fill', fillColor);
     circle.setAttribute('stroke', 'rgba(255,255,255,0.12)');
     circle.setAttribute('stroke-width', '1.5');
-    circle.setAttribute('filter', 'url(#glow-soft)');
     circle.style.opacity = '0.85';
-    circle.classList.add('graph-node-circle');
     g.appendChild(circle);
 
     const label = document.createElementNS(ns, 'text');
@@ -1121,12 +1044,8 @@ function playGraphHistory() {
     label.setAttribute('text-anchor', 'middle');
     label.setAttribute('fill', '#c8c0b4');
     label.setAttribute('font-size', '10');
-    label.setAttribute('font-family', 'Inter, sans-serif');
-    label.textContent = n.label.length > 20 ? n.label.slice(0, 19) + '…' : n.label;
-    label.style.opacity = '0.8';
-    label.classList.add('graph-node-label');
+    label.textContent = n.label.length > 18 ? n.label.slice(0, 17) + '…' : n.label;
     g.appendChild(label);
-
     gNodesGroup.appendChild(g);
   });
   gRoot.appendChild(gNodesGroup);
@@ -1148,72 +1067,18 @@ function playGraphHistory() {
 
     if (step < sorted.length) {
       const task = sorted[step];
-      const node = gNodeMap[task.id];
-      if (node) {
-        node.x = 80 + Math.random() * (W - 160);
-        node.y = 60 + Math.random() * (H - 120);
-        node._revealed = true;
+      if (gNodeMap[task.id]) {
+        const node = gNodeMap[task.id];
+        gHistoryPlay.placed.add(node.id);
 
-        // Add edges connected to this node (only between revealed nodes)
-        links.forEach(l => {
-          const s = gNodeMap[l.sourceId], t = gNodeMap[l.targetId];
-          if (s && t && s._revealed && t._revealed && (s.id === node.id || t.id === node.id)) {
-            if (!gEdges.some(e => (e.source === s && e.target === t) || (e.source === t && e.target === s))) {
-              gEdges.push({ source: s, target: t, type: l.type || 'related' });
-            }
-          }
-        });
-        if (task.parentId && gNodeMap[task.parentId] && gNodeMap[task.parentId]._revealed) {
-          const s = node, t = gNodeMap[task.parentId];
-          if (!gEdges.some(e => (e.source === s && e.target === t) || (e.source === t && e.target === s))) {
-            gEdges.push({ source: s, target: t, type: 'parent' });
-          }
-        }
-
-        // Run mini-layout on revealed nodes
-        const visible = gNodes.filter(nn => nn._revealed);
-        if (visible.length > 1) runMiniLayout(visible);
-
-        // Show and position this node
+        // Fade in this node
         const nodeG = gNodesGroup.querySelector(`.graph-node[data-id="${node.id}"]`);
-        if (nodeG) {
-          nodeG.setAttribute('transform', `translate(${node.x},${node.y})`);
-          nodeG.style.opacity = '1';
-        }
-
-        // Add only new edges for this node (do NOT regenerate all)
-        const newEdges = gEdges.filter(e => e._step === undefined);
-        newEdges.forEach(e => {
-          e._step = step;
-          const idx = gEdges.indexOf(e);
-          const path = document.createElementNS(ns, 'path');
-          path.setAttribute('d', edgeCurve(e, idx).d);
-          const isParent = e.type === 'parent';
-          const color = isParent ? 'rgba(224,176,92,0.35)' : 'rgba(133,173,114,0.2)';
-          path.setAttribute('stroke', color);
-          path.setAttribute('stroke-width', isParent ? '2' : '1');
-          path.setAttribute('fill', 'none');
-          if (isParent) path.setAttribute('stroke-dasharray', '5,4');
-          path.classList.add('graph-edge');
-          path.dataset.edgeIdx = idx;
-          path.style.opacity = '0';
-          path.style.transition = 'opacity 0.6s ease';
-          gEdgesGroup.appendChild(path);
-          requestAnimationFrame(() => { path.style.opacity = '0.6'; });
-        });
-        // Update existing edge paths (positions may have shifted due to mini-layout)
-        gEdgesGroup.querySelectorAll('.graph-edge').forEach(el => {
-          const idx = parseInt(el.dataset.edgeIdx);
-          const e = gEdges[idx];
-          if (e) el.setAttribute('d', edgeCurve(e, idx).d);
-        });
+        if (nodeG) nodeG.style.opacity = '1';
 
         const info = $('graph-info');
         if (info) info.textContent = `История: ${step + 1}/${sorted.length} · 🕐 ${esc(task.title)}`;
       }
     } else {
-      // Final: run full layout then re-render with full interactivity
-      runMiniLayout(gNodes);
       if (btn) btn.textContent = '▶ История';
       gHistoryPlay = null;
       renderGraph();
@@ -1221,51 +1086,10 @@ function playGraphHistory() {
       return;
     }
 
-    setTimeout(tick, Math.max(50, 800 - step * 3));
+    setTimeout(tick, 120);
   }
 
-  setTimeout(tick, 300);
-}
-
-function runMiniLayout(nodes) {
-  const n = nodes.length;
-  if (n < 2) return;
-  const targetLen = 110;
-  const repulsionStrength = 6000;
-  const attractionStrength = 0.06;
-  const iterations = 40;
-
-  for (let iter = 0; iter < iterations; iter++) {
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const a = nodes[i], b = nodes[j];
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const distSq = Math.max(dx * dx + dy * dy, 1);
-        const dist = Math.sqrt(distSq);
-        const f = repulsionStrength / distSq;
-        const fx = (dx / dist) * f, fy = (dy / dist) * f;
-        a._vx = (a._vx || 0) - fx; a._vy = (a._vy || 0) - fy;
-        b._vx = (b._vx || 0) + fx; b._vy = (b._vy || 0) + fy;
-      }
-    }
-
-    for (const e of gEdges) {
-      if (!nodes.includes(e.source) || !nodes.includes(e.target)) continue;
-      const a = e.source, b = e.target;
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const f = (dist - targetLen) * attractionStrength;
-      const fx = (dx / dist) * f, fy = (dy / dist) * f;
-      a._vx = (a._vx || 0) + fx; a._vy = (a._vy || 0) + fy;
-      b._vx = (b._vx || 0) - fx; b._vy = (b._vy || 0) - fy;
-    }
-
-    for (const n of nodes) {
-      n.x += (n._vx || 0);
-      n.y += (n._vy || 0);
-      n._vx = 0; n._vy = 0;
-    }
-  }
+  setTimeout(tick, 200);
 }
 
 /* ── Init graph UI (minimap, context menu, filters) ── */
