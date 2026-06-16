@@ -1174,9 +1174,18 @@ function playGraphHistory() {
         const visible = gNodes.filter(nn => nn._revealed);
         if (visible.length > 1) runMiniLayout(visible);
 
-        // Update edges SVG
-        gEdgesGroup.innerHTML = '';
-        gEdges.forEach((e, idx) => {
+        // Show and position this node
+        const nodeG = gNodesGroup.querySelector(`.graph-node[data-id="${node.id}"]`);
+        if (nodeG) {
+          nodeG.setAttribute('transform', `translate(${node.x},${node.y})`);
+          nodeG.style.opacity = '1';
+        }
+
+        // Add only new edges for this node (do NOT regenerate all)
+        const newEdges = gEdges.filter(e => e._step === undefined);
+        newEdges.forEach(e => {
+          e._step = step;
+          const idx = gEdges.indexOf(e);
           const path = document.createElementNS(ns, 'path');
           path.setAttribute('d', edgeCurve(e, idx).d);
           const isParent = e.type === 'parent';
@@ -1187,36 +1196,24 @@ function playGraphHistory() {
           if (isParent) path.setAttribute('stroke-dasharray', '5,4');
           path.classList.add('graph-edge');
           path.dataset.edgeIdx = idx;
+          path.style.opacity = '0';
+          path.style.transition = 'opacity 0.6s ease';
           gEdgesGroup.appendChild(path);
+          requestAnimationFrame(() => { path.style.opacity = '0.6'; });
         });
-
-        // Show and position this node
-        const nodeG = gNodesGroup.querySelector(`.graph-node[data-id="${node.id}"]`);
-        if (nodeG) {
-          nodeG.setAttribute('transform', `translate(${node.x},${node.y})`);
-          nodeG.style.opacity = '1';
-        }
+        // Update existing edge paths (positions may have shifted due to mini-layout)
+        gEdgesGroup.querySelectorAll('.graph-edge').forEach(el => {
+          const idx = parseInt(el.dataset.edgeIdx);
+          const e = gEdges[idx];
+          if (e) el.setAttribute('d', edgeCurve(e, idx).d);
+        });
 
         const info = $('graph-info');
         if (info) info.textContent = `История: ${step + 1}/${sorted.length} · 🕐 ${esc(task.title)}`;
       }
     } else {
-      // Final: run full layout + save positions
+      // Final: run full layout then re-render with full interactivity
       runMiniLayout(gNodes);
-      gEdgesGroup.innerHTML = '';
-      gEdges.forEach((e, idx) => {
-        const path = document.createElementNS(ns, 'path');
-        path.setAttribute('d', edgeCurve(e, idx).d);
-        const isParent = e.type === 'parent';
-        const color = isParent ? 'rgba(224,176,92,0.35)' : 'rgba(133,173,114,0.2)';
-        path.setAttribute('stroke', color);
-        path.setAttribute('stroke-width', isParent ? '2' : '1');
-        path.setAttribute('fill', 'none');
-        if (isParent) path.setAttribute('stroke-dasharray', '5,4');
-        path.classList.add('graph-edge');
-        path.dataset.edgeIdx = idx;
-        gEdgesGroup.appendChild(path);
-      });
       if (btn) btn.textContent = '▶ История';
       gHistoryPlay = null;
       renderGraph();
