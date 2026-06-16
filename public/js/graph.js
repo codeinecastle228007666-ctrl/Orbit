@@ -21,6 +21,9 @@ let gCameraHistoryIdx = -1;
 // Pinned nodes
 let gPinned = {};
 
+// History playback
+let gHistoryPlay = null;
+
 // Status filters
 let gFilterStatus = { backlog: true, todo: true, review: true, done: true };
 
@@ -351,7 +354,7 @@ function buildGraphData() {
   }
 }
 
-/* ── Force-directed layout (status clusters) ── */
+/* ── Force-directed layout (link-based only, no status clusters) ── */
 function forceLayout(onDone) {
   const n = gNodes.length;
   if (n === 0) { if (onDone) onDone(); return; }
@@ -360,34 +363,14 @@ function forceLayout(onDone) {
   const W = container?.clientWidth || 800;
   const H = container?.clientHeight || 600;
 
-  // Status cluster centers (quadrants)
-  const clusterCenters = {
-    backlog:  { x: W * 0.25, y: H * 0.25 },
-    todo:     { x: W * 0.75, y: H * 0.25 },
-    review:   { x: W * 0.25, y: H * 0.75 },
-    done:     { x: W * 0.75, y: H * 0.75 }
-  };
-  const clusterSpread = 30;
-
-  // Group nodes by status
-  const statusGroups = {};
-  gNodes.forEach(nd => {
-    const s = nd.status || 'backlog';
-    if (!statusGroups[s]) statusGroups[s] = [];
-    statusGroups[s].push(nd);
-  });
-
-  // Place each status group in its cluster region
-  gNodes.forEach((nd, i) => {
-    const center = clusterCenters[nd.status] || clusterCenters.backlog;
-    const angle = Math.random() * Math.PI * 2;
-    const radius = clusterSpread + Math.random() * 40;
-    nd.x = center.x + Math.cos(angle) * radius + (Math.random() - 0.5) * 15;
-    nd.y = center.y + Math.sin(angle) * radius + (Math.random() - 0.5) * 15;
+  // Random placement (no status-based clustering)
+  gNodes.forEach((nd) => {
+    nd.x = 100 + Math.random() * (W - 200);
+    nd.y = 100 + Math.random() * (H - 200);
     nd._vx = 0; nd._vy = 0;
   });
 
-  // Force-directed physics with cluster centering
+  // Force-directed physics (edges only, no cluster centering)
   const targetLen = 140;
   const repulsionStrength = 8000;
   const attractionStrength = 0.06;
@@ -422,13 +405,6 @@ function forceLayout(onDone) {
       const fx = (dx / dist) * f, fy = (dy / dist) * f;
       a._vx += fx; a._vy += fy;
       b._vx -= fx; b._vy -= fy;
-    }
-
-    // Cluster-specific centering (nodes pulled toward their status group center)
-    for (const n of gNodes) {
-      const cc = clusterCenters[n.status] || clusterCenters.backlog;
-      n._vx += (cc.x - n.x) * 0.0008 * cool;
-      n._vy += (cc.y - n.y) * 0.0008 * cool;
     }
 
     // Apply velocity with damping & cooling
@@ -1055,6 +1031,180 @@ function toggleGraphFilter(status) {
   renderGraph();
 }
 
+/* ── History playback: reveal nodes in creation order ── */
+function playGraphHistory() {
+  if (gHistoryPlay) {
+    gHistoryPlay.stop = true;
+    gHistoryPlay = null;
+    renderGraph();
+    return;
+  }
+
+  const sorted = tasks.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  if (sorted.length === 0) return showToast('Нет задач', 'info');
+  const container = $('graph-container');
+  const W = container?.clientWidth || 800;
+  const H = container?.clientHeight || 600;
+
+  // Build full graph data once, hide all nodes initially
+  buildGraphData();
+  gNodes.forEach(n => { n.x = W / 2; n.y = H / 2; });
+  gEdges.length = 0;
+
+  gHistoryPlay = { idx: 0, sorted, stop: false, step: 0, maxSteps: sorted.length + 2 };
+
+  const btn = $('btn-graph-history');
+  if (btn) btn.textContent = '⏹ Стоп';
+
+  renderGraphSvg();
+
+  function tick() {
+    if (gHistoryPlay.stop) { gHistoryPlay = null; if (btn) btn.textContent = '▶ История'; return; }
+
+    const step = gHistoryPlay.step;
+    gHistoryPlay.step++;
+
+    if (step < gHistoryPlay.sorted.length) {
+      const task = gHistoryPlay.sorted[step];
+      const node = gNodeMap[task.id];
+      if (node) {
+        // Place node at random position
+        node.x = 100 + Math.random() * (W - 200);
+        node.y = 100 + Math.random() * (H - 200);
+
+        // Add edges for this node
+        links.forEach(l => {
+          const s = gNodeMap[l.sourceId], t = gNodeMap[l.targetId];
+          if (s && t && (s.id === node.id || t.id === node.id)) {
+            if (!gEdges.some(e => (e.source === s && e.target === t) || (e.source === t && e.target === s))) {
+              gEdges.push({ source: s, target: t, type: l.type || 'related' });
+            }
+          }
+        });
+        // Add parent-child edges
+        if (task.parentId && gNodeMap[task.parentId]) {
+          const s = node, t = gNodeMap[task.parentId];
+          if (!gEdges.some(e => (e.source === s && e.target === t) || (e.source === t && e.target === s))) {
+            gEdges.push({ source: s, target: t, type: 'parent' });
+          }
+        }
+
+        // Recompute target positions for visible nodes
+        const visible = gNodes.filter(nn => nn.x !== W / 2 || nn.y !== H / 2);
+        if (visible.length > 1) runMiniLayout(visible);
+
+        // Update the SVG
+        const svg = document.querySelector('#graph-svg');
+        if (!svg) return;
+        const edgesGroup = svg.querySelector('#graph-edges');
+        const nodesGroup = svg.querySelector('#graph-nodes');
+        if (!edgesGroup || !nodesGroup) return;
+
+        // Regenerate edges SVG
+        edgesGroup.innerHTML = '';
+        gEdges.forEach((e, idx) => {
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', edgeCurve(e, idx).d);
+          const isParent = e.type === 'parent';
+          const color = isParent ? 'rgba(224,176,92,0.35)' : 'rgba(133,173,114,0.2)';
+          path.setAttribute('stroke', color);
+          path.setAttribute('stroke-width', isParent ? '2' : '1');
+          path.setAttribute('fill', 'none');
+          if (isParent) path.setAttribute('stroke-dasharray', '5,4');
+          path.classList.add('graph-edge');
+          path.dataset.edgeIdx = idx;
+          edgesGroup.appendChild(path);
+        });
+
+        // Position this node
+        const nodeG = nodesGroup.querySelector(`.graph-node[data-id="${node.id}"]`);
+        if (nodeG) {
+          nodeG.setAttribute('transform', `translate(${node.x},${node.y})`);
+          nodeG.style.opacity = '0';
+          nodeG.style.transition = 'opacity 0.4s ease';
+          requestAnimationFrame(() => { nodeG.style.opacity = '1'; });
+        }
+
+        // Update info
+        const info = $('graph-info');
+        if (info) info.textContent = `История: ${step + 1}/${gHistoryPlay.sorted.length} · 🕐 ${esc(task.title)}`;
+      }
+    } else if (step === gHistoryPlay.sorted.length) {
+      // Final relaxation pass
+      runMiniLayout(gNodes);
+      // Redraw all edges
+      const edgesGroup = document.querySelector('#graph-edges');
+      if (edgesGroup) {
+        edgesGroup.innerHTML = '';
+        gEdges.forEach((e, idx) => {
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', edgeCurve(e, idx).d);
+          const isParent = e.type === 'parent';
+          const color = isParent ? 'rgba(224,176,92,0.35)' : 'rgba(133,173,114,0.2)';
+          path.setAttribute('stroke', color);
+          path.setAttribute('stroke-width', isParent ? '2' : '1');
+          path.setAttribute('fill', 'none');
+          if (isParent) path.setAttribute('stroke-dasharray', '5,4');
+          path.classList.add('graph-edge');
+          path.dataset.edgeIdx = idx;
+          edgesGroup.appendChild(path);
+        });
+      }
+      gNodes.forEach(nn => { nn._targetX = nn.x; nn._targetY = nn.y; });
+      // Clean up history state
+      if (btn) btn.textContent = '▶ История';
+      gHistoryPlay = null;
+      showToast('Граф построен!', 'success', 2000);
+      return;
+    }
+
+    setTimeout(tick, Math.max(50, 800 - gHistoryPlay.step * 3));
+  }
+
+  setTimeout(tick, 300);
+}
+
+function runMiniLayout(nodes) {
+  const n = nodes.length;
+  if (n < 2) return;
+  const targetLen = 120;
+  const repulsionStrength = 4000;
+  const attractionStrength = 0.05;
+  const iterations = 30;
+
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = nodes[i], b = nodes[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const distSq = Math.max(dx * dx + dy * dy, 1);
+        const dist = Math.sqrt(distSq);
+        const f = repulsionStrength / distSq;
+        const fx = (dx / dist) * f, fy = (dy / dist) * f;
+        a._vx = (a._vx || 0) - fx; a._vy = (a._vy || 0) - fy;
+        b._vx = (b._vx || 0) + fx; b._vy = (b._vy || 0) + fy;
+      }
+    }
+
+    for (const e of gEdges) {
+      if (!nodes.includes(e.source) || !nodes.includes(e.target)) continue;
+      const a = e.source, b = e.target;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const f = (dist - targetLen) * attractionStrength;
+      const fx = (dx / dist) * f, fy = (dy / dist) * f;
+      a._vx = (a._vx || 0) + fx; a._vy = (a._vy || 0) + fy;
+      b._vx = (b._vx || 0) - fx; b._vy = (b._vy || 0) - fy;
+    }
+
+    for (const n of nodes) {
+      n.x += (n._vx || 0);
+      n.y += (n._vy || 0);
+      n._vx = 0; n._vy = 0;
+    }
+  }
+}
+
 /* ── Init graph UI (minimap, context menu, filters) ── */
 function initGraphUI() {
   if (window._graphUIInit) return;
@@ -1062,6 +1212,10 @@ function initGraphUI() {
 
   initMiniMap();
   setupContextMenu();
+
+  // History playback
+  const historyBtn = $('btn-graph-history');
+  if (historyBtn) historyBtn.addEventListener('click', playGraphHistory);
 
   // Filter chip clicks
   document.querySelectorAll('#graph-filter-bar .filter-chip').forEach(chip => {
